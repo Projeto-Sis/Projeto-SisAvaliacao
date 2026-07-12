@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sisavalia-search-engine"
+version = "0.1.0"
+description = "API de coleta, validação e deduplicação de amostras do SISAVALIA"
+requires-python = ">=3.11"
+dependencies = [
+  "certifi>=2025,<2027",
+  "fastapi[standard]>=0.115,<1",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+dev = ["httpx2"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

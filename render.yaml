@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: sisavalia-mma
+    runtime: python
+    buildCommand: pip install -e backend
+    startCommand: python -m app.db migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: SISAVALIA_ENV
+        value: production
+      - key: SISAVALIA_ENABLE_FIXTURE_CONNECTOR
+        value: false
+      - key: SISAVALIA_DATABASE_URL
+        fromDatabase:
+          name: sisavalia-db
+          property: connectionString
+      - key: SISAVALIA_GOOGLE_MAPS_API_KEY
+        sync: false
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+
+databases:
+  - name: sisavalia-db
+    databaseName: sisavalia
+    user: sisavalia

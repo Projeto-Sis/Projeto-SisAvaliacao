@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SISAVALIA</title>
+    <link rel="stylesheet" href="src/styles.css?v=20260710-delete-photo" />
+  </head>
+  <body class="auth-locked">
+    <section id="loginGate" class="login-gate" aria-labelledby="loginTitle">
+      <div class="login-panel">
+        <div class="login-logo" role="img" aria-label="MMA Engenharia e Consultoria"></div>
+        <div class="login-content">
+          <span class="login-kicker">Acesso ao sistema</span>
+          <h1 id="loginTitle">SISAVALIA</h1>
+          <p>Avaliacao imobiliaria por inferencia estatistica</p>
+          <form id="loginForm" class="login-form">
+            <label>Usuario<input id="loginUser" autocomplete="username" value="Admin" required /></label>
+            <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+            <button class="primary-button" type="submit">Entrar</button>
+            <span id="loginError" class="login-error" role="alert" aria-live="polite"></span>
+          </form>
+        </div>
+      </div>
+    </section>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark" role="img" aria-label="Logomarca MMA Engenharia e Consultoria"></span>
+          <div class="brand-copy">
+            <strong>SISAVALIA</strong>
+            <small>Inferencia imobiliaria</small>
+          </div>
+        </div>
+        <nav class="steps" aria-label="Módulos do SISAVALIA">
+          <section class="nav-group" aria-labelledby="navGestao">
+            <h2 id="navGestao" class="nav-group-label">Módulo de Gestão</h2>
+            <ul class="nav-list">
+              <li><a href="#projetos">Projetos</a></li>
+              <li><a href="#controle-demanda">Controle de Demanda <span class="nav-beta">novo</span></a></li>
+              <li><a href="#financeiro">Evolução Financeira</a></li>
+            </ul>
+          </section>
+          <section class="nav-group" aria-labelledby="navAvaliacao">
+            <h2 id="navAvaliacao" class="nav-group-label">Módulo Avaliação</h2>
+            <ul class="nav-list">
+              <li><a href="#os" class="active">OS</a></li>
+              <li><a href="#avaliando">Avaliando</a></li>
+              <li><a href="#busca">Busca <span class="nav-beta">beta</span></a></li>
+              <li><a href="#amostras">Amostras</a></li>
+              <li><a href="#modelo">Modelo</a></li>
+              <li><a href="#laudo">Laudo SisAvalia</a></li>
+            </ul>
+          </section>
+        </nav>
+        <div class="sidebar-status">
+          <span id="overallStatusDot" class="status-dot warn"></span>
+          <span id="overallStatusText">Validando requisitos</span>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>Avaliacao de Imovel Urbano</h1>
+            <p>Metodo comparativo direto de dados de mercado com estatistica inferencial.</p>
+          </div>
+          <div class="export-actions">
+            <div class="actions">
+              <button id="loadSampleBtn" class="icon-button" title="Carregar exemplo">↻</button>
+              <button id="logoutBtn" class="ghost-button">Sair</button>
+              <button id="exportHtmlBtn" class="secondary-button">Exportar HTML</button>
+              <button id="exportPdfBtn" class="primary-button">Gerar PDF</button>
+            </div>
+            <small id="exportStatus" class="export-status" aria-live="polite"></small>
+          </div>
+        </header>
+
+        <section id="projetos" class="band">
+          <div class="section-heading">
+            <h2>Projetos Salvos</h2>
+            <span class="pill">Armazenamento local</span>
+          </div>
+          <div class="project-toolbar">
+            <label class="project-name">Nome do projeto<input id="projectName" placeholder="Ex.: Laudo Lapao - OS 2026..." /></label>
+            <div class="inline-actions">
+              <button id="newProjectBtn" class="ghost-button">Novo</button>
+              <button id="saveProjectBtn" class="primary-button">Salvar projeto</button>
+              <button id="exportProjectBtn" class="secondary-button">Exportar backup</button>
+            </div>
+          </div>
+          <div class="project-import">
+            <input id="projectImportFile" class="file-input" type="file" accept=".json,application/json" />
+            <button id="importProjectBtn" class="secondary-button">Importar projeto</button>
+            <span id="projectStatus" class="project-status" aria-live="polite">Nenhum projeto salvo nesta sessao.</span>
+          </div>
+          <div id="projectList" class="project-list"></div>
+        </section>
+
+        <section id="controle-demanda" class="band demand-control">
+          <div class="section-heading">
+            <div>
+              <h2>Controle de Demanda</h2>
+              <p>Cadastro e acompanhamento das ordens de serviço recebidas.</p>
+            </div>
+            <span class="pill">Módulo gerencial</span>
+          </div>
+          <div id="demandDashboard" class="demand-dashboard" aria-live="polite">
+            <article><small>Total de demandas</small><strong data-demand-metric="total_demands">0</strong></article>
+            <article><small>Fora do prazo</small><strong data-demand-metric="overdue">0</strong></article>
+            <article><small>ART pendente</small><strong data-demand-metric="pending_art">0</strong></article>
+            <article><small>Pagamento pendente</small><strong data-demand-metric="pending_payment">0</strong></article>
+            <article><small>Valor dos serviços</small><strong data-demand-money="total_service_value">R$ 0,00</strong></article>
+            <article><small>Honorários de parceiros</small><strong data-demand-money="total_partner_fees">R$ 0,00</strong></article>
+          </div>
+          <div class="demand-register-grid">
+            <details class="demand-create-panel">
+              <summary>Cadastrar parceiro</summary>
+              <form id="partnerForm" class="form-grid demand-form">
+                <label>Nome do parceiro<input id="partnerName" required /></label>
+                <label>Tipo de pessoa<select id="partnerPersonType"><option value="">Não informado</option><option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option></select></label>
+                <label>CPF/CNPJ<input id="partnerDocument" /></label>
+                <label>Cidade-base<input id="partnerCity" /></label>
+                <label>UF<input id="partnerState" maxlength="2" /></label>
+                <label>Telefone<input id="partnerPhone" type="tel" /></label>
+                <label>E-mail<input id="partnerEmail" type="email" /></label>
+                <label>PIX<input id="partnerPix" /></label>
+                <label>Banco<input id="partnerBank" /></label>
+                <label>Agência<input id="partnerAgency" /></label>
+                <label>Conta<input id="partnerAccount" /></label>
+                <label>Operação<input id="partnerOperation" /></label>
+                <label class="span-3">Nome do titular<input id="partnerAccountHolder" /></label>
+                <label class="span-3">Observações<textarea id="partnerNotes" rows="2"></textarea></label>
+                <div class="inline-actions span-3">
+                  <button class="primary-button" type="submit">Salvar parceiro</button>
+                  <span id="partnerFormMessage" class="project-status">Disponível para seleção nas demandas.</span>
+                </div>
+              </form>
+              <div id="partnerRegistryList" class="registry-list"></div>
+            </details>
+            <details class="demand-create-panel">
+              <summary>Cadastrar engenheiro</summary>
+              <form id="engineerForm" class="form-grid demand-form">
+                <label>Nome do engenheiro<input id="engineerName" required /></label>
+                <label>CREA/CAU<input id="engineerRegistration" /></label>
+                <label>UF-base<input id="engineerState" maxlength="2" /></label>
+                <label>Telefone<input id="engineerPhone" type="tel" /></label>
+                <label>E-mail<input id="engineerEmail" type="email" /></label>
+                <label class="span-3">Observações<textarea id="engineerNotes" rows="2"></textarea></label>
+                <div class="inline-actions span-3">
+                  <button class="primary-button" type="submit">Salvar engenheiro</button>
+                  <span id="engineerFormMessage" class="project-status">Disponível para seleção nas demandas.</span>
+                </div>
+              </form>
+              <div id="engineerRegistryList" class="registry-list"></div>
+            </details>
+          </div>
+          <details class="demand-create-panel">
+            <summary>Nova Demanda / OS</summary>
+            <form id="demandForm" class="form-grid demand-form">
+              <label>Banco / cliente<select id="demandBank" required></select></label>
+              <label>Número da OS<input id="demandOsNumber" required /></label>
+              <label>Número final da OS<input id="demandFinalOsNumber" /></label>
+              <label>Data de chegada<input id="demandArrivalDate" type="date" required /></label>
+              <label>Prazo em dias<input id="demandDeadlineDays" type="number" min="1" value="7" /></label>
+              <label>Prazo definido<input id="demandDeadline" type="date" /></label>
+              <label>Valor do serviço<input id="demandServiceValue" type="number" min="0" step="0.01" /></label>
+              <label>Engenheiro<select id="demandEngineer"><option value="">Não definido</option></select></label>
+              <label>Status da ART<select id="demandArtStatus"><option>Pendente</option><option>ART paga</option><option>Isento</option><option>Cancelada</option></select></label>
+              <label>Parceiro<select id="demandPartner"><option value="">Não definido</option></select></label>
+              <label>Honorário do parceiro<input id="demandPartnerFee" type="number" min="0" step="0.01" /></label>
+              <label>Cidade<input id="demandCity" required /></label>
+              <label>UF<input id="demandState" maxlength="2" required /></label>
+              <label>Status da demanda<select id="demandStatus"><option>Recebida</option><option>Em análise</option><option>Agendada</option><option>Vistoria realizada</option><option>Em elaboração</option><option>Enviada ao engenheiro</option><option>Finalizada</option><option>Entregue</option><option>Cancelada</option><option>Não entregue</option></select></label>
+              <label class="span-3">Observações<textarea id="demandNotes" rows="3"></textarea></label>
+              <div class="inline-actions span-3">
+                <button id="saveDemandBtn" class="primary-button" type="submit">Cadastrar demanda</button>
+                <button id="cancelDemandEditBtn" class="ghost-button" type="button" hidden>Cancelar edição</button>
+                <span id="demandFormMessage" class="project-status">Os dados são armazenados no PostgreSQL do SISAVALIA.</span>
+              </div>
+            </form>
+          </details>
+          <div class="section-heading demand-list-heading">
+            <h3>Demandas cadastradas</h3>
+            <button id="refreshDemandsBtn" class="secondary-button" type="button">Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table class="demand-table">
+              <thead><tr><th>Prazo</th><th>Banco</th><th>OS</th><th>Cidade/UF</th><th>Engenheiro</th><th>Parceiro</th><th>Situação</th><th>Pagamento</th><th>Avaliação</th></tr></thead>
+              <tbody id="demandTableBody"><tr><td colspan="9">Inicie o backend e configure o PostgreSQL para carregar as demandas.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="financeiro" class="band">
+          <div class="section-heading">
+            <div>
+              <h2>Evolução Financeira Mensal</h2>
+              <p>Acompanhamento gerencial das demandas e pagamentos.</p>
+            </div>
+            <span class="pill">Módulo de Gestão</span>
+          </div>
+          <div class="financial-evolution" aria-labelledby="financialEvolutionTitle">
+            <div class="financial-evolution-heading">
+              <div>
+                <span class="financial-kicker">Visão gerencial</span>
+                <h3 id="financialEvolutionTitle">Desempenho financeiro</h3>
+                <p>Faturamento, honorários e resultado líquido estimado das demandas recebidas.</p>
+              </div>
+              <span class="pill">Base preparada para Power BI</span>
+            </div>
+            <div class="financial-summary">
+              <article><small>Faturamento no período</small><strong id="financialPeriodGross">R$ 0,00</strong></article>
+              <article><small>Resultado líquido estimado</small><strong id="financialPeriodNet">R$ 0,00</strong></article>
+              <article><small>Total de OS</small><strong id="financialPeriodOs">0</strong></article>
+              <article><small>Variação mensal</small><strong id="financialMonthlyChange">—</strong></article>
+            </div>
+            <div class="financial-chart-wrap">
+              <canvas id="financialMonthlyChart" height="300" aria-label="Gráfico da evolução financeira mensal"></canvas>
+              <div id="financialChartEmpty" class="financial-chart-empty" hidden>Cadastre demandas com valores para formar a série financeira mensal.</div>
+            </div>
+            <div class="financial-legend" aria-label="Legenda do gráfico">
+              <span><i class="legend-gross"></i>Faturamento</span>
+              <span><i class="legend-fees"></i>Honorários</span>
+              <span><i class="legend-net"></i>Resultado líquido</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="os" class="band">
+          <div class="section-heading">
+            <h2>Ordem de Servico</h2>
+            <span class="pill">SisAvalia</span>
+          </div>
+          <div class="evaluation-demand-search">
+            <div>
+              <span class="financial-kicker">Integração com a gestão</span>
+              <h3>Localizar OS cadastrada</h3>
+              <p>Pesquise pelo número da OS, banco, cidade ou UF para preencher a avaliação.</p>
+            </div>
+            <div class="evaluation-demand-controls">
+              <label>Pesquisar demanda<input id="evaluationDemandSearch" placeholder="Ex.: 260099518, Banco do Brasil, Salvador" /></label>
+              <button id="searchEvaluationDemandBtn" class="secondary-button" type="button">Pesquisar OS</button>
+            </div>
+            <div id="evaluationDemandMatches" class="evaluation-demand-matches" hidden></div>
+            <span id="evaluationDemandMessage" class="project-status">Nenhuma demanda vinculada à avaliação atual.</span>
+          </div>
+          <div class="form-grid">
+            <label>Numero da OS<input id="osNumber" /></label>
+            <label>Data da OS<input id="osDate" type="date" /></label>
+            <label>Data da vistoria<input id="inspectionDate" type="date" /></label>
+            <label>Proponente<input id="proponent" /></label>
+            <label>Proposito<select id="purpose"></select></label>
+            <label>Objetivo<select id="objective"></select></label>
+          </div>
+        </section>
+
+        <section id="avaliando" class="band">
+          <div class="section-heading">
+            <h2>Imovel Avaliando</h2>
+            <span class="pill">NBR 14653-2</span>
+          </div>
+          <div class="form-grid">
+            <label>Endereco<input id="address" /></label>
+            <label>Cidade<input id="city" /></label>
+            <label>UF<input id="state" maxlength="2" /></label>
+            <label>Tipo<select id="propertyType"></select></label>
+            <label>Area construida (m2)<input id="builtArea" type="number" step="0.01" /></label>
+            <label>Area terreno (m2)<input id="landArea" type="number" step="0.01" /></label>
+            <label>Padrao<select id="standard"></select></label>
+            <label>Conservacao<select id="conservation"></select></label>
+            <label>Localizacao<select id="locationScore"></select></label>
+            <label>Quartos (sem suítes)<input id="bedrooms" type="number" min="0" step="1" /></label>
+            <label>Suítes<input id="suites" type="number" min="0" step="1" /></label>
+            <label>Banheiros<input id="bathrooms" type="number" step="1" /></label>
+            <label>Vagas<input id="parking" type="number" step="1" /></label>
+          </div>
+          <div class="extended-form">
+            <div class="extended-form-heading">
+              <h3>Dados Completos do Laudo</h3>
+              <p>Campos vinculados diretamente as paginas formais da previa.</p>
+            </div>
+            <details open>
+              <summary>Identificacao e documentacao</summary>
+              <div class="form-grid">
+                <label>CPF/CNPJ<input id="cpfCnpj" /></label>
+                <label>Numero do imovel<input id="addressNumber" /></label>
+                <label>Complemento<input id="addressComplement" /></label>
+                <label>Bairro / setor<input id="neighborhood" /></label>
+                <label class="cep-label">CEP
+                  <div class="cep-control">
+                    <input id="postalCode" inputmode="numeric" maxlength="9" autocomplete="postal-code" />
+                    <button id="lookupCepBtn" type="button" class="secondary-button">Consultar</button>
+                  </div>
+                  <small id="cepStatus" class="cep-status">Apoio cadastral via BrasilAPI CEP v2, com ViaCEP como fallback.</small>
+                  <small class="cep-sources">Fontes: <a href="https://brasilapi.com.br/docs" target="_blank" rel="noopener noreferrer">BrasilAPI CEP v2</a> e <a href="https://viacep.com.br/" target="_blank" rel="noopener noreferrer">ViaCEP</a>.</small>
+                </label>
+                <label>Codigo IBGE<input id="ibgeCode" readonly /></label>
+                <label>Condominio / empreendimento<input id="condominiumName" /></label>
+                <label>Matricula<input id="registrationNumber" /></label>
+                <label>Cartorio / oficio<input id="registryOffice" /></label>
+                <label>Emissao da matricula<input id="registrationDate" type="date" /></label>
+                <label class="span-3">Observacoes cadastrais<textarea id="propertyNotes" rows="3"></textarea></label>
+              </div>
+            </details>
+            <details>
+              <summary>Entorno e terreno</summary>
+              <div class="form-grid">
+                <label>Uso predominante<input id="predominantUse" /></label>
+                <label>Acesso<input id="accessType" /></label>
+                <label>Area de risco / alagamento<select id="riskArea"></select></label>
+                <label>Numero de frentes<input id="fronts" type="number" min="0" step="1" /></label>
+                <label>Testada (m)<input id="frontage" type="number" min="0" step="0.01" /></label>
+                <label>Topografia<input id="topography" /></label>
+                <label>Posicao na quadra<input id="blockPosition" /></label>
+                <label>Fracao ideal<input id="idealFraction" /></label>
+                <label>Superficie<input id="surface" /></label>
+                <label>Cota greide / formato<input id="gradeFormat" /></label>
+                <label class="span-3">Infraestrutura urbana<textarea id="urbanInfrastructure" rows="2"></textarea></label>
+                <label class="span-3">Servicos publicos<textarea id="publicServices" rows="2"></textarea></label>
+              </div>
+            </details>
+            <details>
+              <summary>Caracteristicas construtivas</summary>
+              <div class="form-grid">
+                <label>Uso do imovel<input id="propertyUse" /></label>
+                <label>Posicao da edificacao<input id="buildingPosition" /></label>
+                <label>Ocupacao<input id="occupancy" /></label>
+                <label>Lavabos<input id="lavatories" type="number" min="0" step="1" /></label>
+                <label>Pavimentos<input id="floors" type="number" min="0" step="1" /></label>
+                <label>Idade aparente (anos)<input id="apparentAge" type="number" min="0" step="1" /></label>
+                <label>Esquadrias<input id="windowFrames" /></label>
+                <label>Cobertura / teto<input id="roofCeiling" /></label>
+                <label>Abastecimento de agua<input id="waterSupply" /></label>
+                <label>Esgoto sanitario<input id="sewage" /></label>
+                <label>Fechamento de paredes<input id="wallSystem" /></label>
+                <label>Tipo de implantacao<input id="deploymentType" /></label>
+                <label>Habitado anteriormente<select id="previouslyOccupied"></select></label>
+                <label>Area nao averbada (m2)<input id="unregisteredArea" type="number" min="0" step="0.01" /></label>
+                <label>Vagas cobertas<input id="coveredParking" type="number" min="0" step="1" /></label>
+                <label>Vagas descobertas<input id="uncoveredParking" type="number" min="0" step="1" /></label>
+                <label>Latitude<input id="latitude" type="number" step="any" /></label>
+                <label>Longitude<input id="longitude" type="number" step="any" /></label>
+                <label class="span-3">Comodos e dependencias<textarea id="roomsDescription" rows="2"></textarea></label>
+                <label class="span-3">Infraestrutura do imovel<textarea id="propertyInfrastructure" rows="2"></textarea></label>
+                <label class="span-3">Estrutura do condominio<textarea id="condominiumFeatures" rows="2"></textarea></label>
+              </div>
+            </details>
+            <details>
+              <summary>Vistoria e condicoes gerais</summary>
+              <div class="form-grid">
+                <label>Documentacao confere<select id="documentationMatches"></select></label>
+                <label>Estabilidade e solidez<select id="stability"></select></label>
+                <label>Vicios aparentes<select id="apparentDefects"></select></label>
+                <label>Habitabilidade<select id="habitability"></select></label>
+                <label>Fatores ambientais<select id="environmentalFactors"></select></label>
+                <label>Sistema DATEC/SINAT<select id="datecSinat"></select></label>
+                <label>Contato da vistoria<input id="inspectionContact" /></label>
+                <label>Telefone<input id="inspectionPhone" type="tel" /></label>
+                <label>Data do contato<input id="contactDate" type="date" /></label>
+                <label>Hora de chegada<input id="arrivalTime" type="time" /></label>
+                <label>Hora de saida<input id="departureTime" type="time" /></label>
+                <label>Data do agendamento<input id="appointmentDate" type="date" /></label>
+                <label>Hora do agendamento<input id="appointmentTime" type="time" /></label>
+                <label class="span-3">Fatores valorizantes<textarea id="valuedFactors" rows="2"></textarea></label>
+                <label class="span-3">Fatores restritivos / depreciacao<textarea id="restrictiveFactors" rows="2"></textarea></label>
+                <label class="span-3">Ateste / historico de vistoria<textarea id="inspectionHistory" rows="2"></textarea></label>
+              </div>
+            </details>
+            <details>
+              <summary>Mercado, garantia e conclusao</summary>
+              <div class="form-grid">
+                <label>Desempenho do mercado<input id="marketPerformance" /></label>
+                <label>Nivel de ofertas<input id="offersLevel" /></label>
+                <label>Liquidez / prazo provavel<input id="liquidity" /></label>
+                <label>Prazo efetivo<input id="effectivePeriod" /></label>
+                <label>Aceito em garantia<select id="guaranteeAccepted"></select></label>
+                <label>ART/RRT<input id="artRrt" /></label>
+                <label class="span-3">Unidades autonomas / cartorio<textarea id="autonomousUnits" rows="2"></textarea></label>
+                <label class="span-3">Observacoes finais<textarea id="finalNotes" rows="3"></textarea></label>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section id="busca" class="band search-engine-panel" data-search-engine-enabled="false">
+          <div class="section-heading">
+            <div>
+              <h2>Busca Automatizada de Amostras</h2>
+              <p>Área experimental isolada do modelo estatístico.</p>
+            </div>
+            <span id="searchEngineStatusPill" class="pill">Desativada por segurança</span>
+          </div>
+          <div class="search-engine-notice" role="status">
+            <strong>Busca assistida</strong>
+            <span>As fontes são consultadas pelo backend. Todo resultado passa por validação, deduplicação e aprovação antes de poder entrar no cálculo.</span>
+          </div>
+          <section class="search-assisted-collection" aria-labelledby="assistedCollectionTitle">
+            <div>
+              <strong id="assistedCollectionTitle">Coleta gratuita assistida</strong>
+              <p>Abra pesquisas já preenchidas, selecione somente anúncios pertinentes e registre os dados no modelo autorizado. O SISAVALIA não copia os portais automaticamente.</p>
+            </div>
+            <div class="search-portal-actions" aria-label="Abrir pesquisas nos portais">
+              <button class="ghost-button search-portal-button" type="button" data-portal="olx">Pesquisar OLX</button>
+              <button class="ghost-button search-portal-button" type="button" data-portal="zap">Pesquisar ZAP</button>
+              <button class="ghost-button search-portal-button" type="button" data-portal="vivareal">Pesquisar Viva Real</button>
+              <button class="ghost-button search-portal-button" type="button" data-portal="quintoandar">Pesquisar QuintoAndar</button>
+              <button id="downloadSearchCsvTemplate" class="secondary-button" type="button">Baixar modelo da busca</button>
+            </div>
+            <div class="url-capture-panel">
+              <label class="url-capture-address">URL do anúncio selecionado
+                <input id="captureListingUrl" type="url" placeholder="https://..." autocomplete="off" />
+              </label>
+              <button id="captureListingBtn" class="secondary-button" type="button">Ler anúncio</button>
+              <div id="urlCapturePreview" class="url-capture-preview" hidden>
+                <label>Fonte<input id="captureSource" readonly /></label>
+                <label>Preço (R$)<input id="capturePrice" type="number" min="0" step="0.01" /></label>
+                <label>Área (m²)<input id="captureArea" type="number" min="0" step="0.01" /></label>
+                <label class="span-2">Endereço do anúncio<input id="captureAddress" /></label>
+                <label>Latitude<input id="captureLatitude" type="number" step="any" /></label>
+                <label>Longitude<input id="captureLongitude" type="number" step="any" /></label>
+                <label>Quartos (sem suítes)<input id="captureBedrooms" type="number" min="0" /></label>
+                <label>Suítes<input id="captureSuites" type="number" min="0" /></label>
+                <label>Banheiros<input id="captureBathrooms" type="number" min="0" /></label>
+                <label>Vagas<input id="captureParking" type="number" min="0" /></label>
+                <button id="addCapturedListingBtn" class="primary-button" type="button">Confirmar anúncio real</button>
+              </div>
+              <div class="url-capture-footer">
+                <strong id="capturedListingsSummary">0 anúncio(s) confirmado(s)</strong>
+                <button id="downloadCapturedListingsBtn" class="ghost-button" type="button" disabled>Baixar coleta preenchida</button>
+              </div>
+            </div>
+            <small id="assistedCollectionMessage">Preencha cidade, UF e características do avaliando para montar as pesquisas.</small>
+          </section>
+          <div class="search-engine-grid">
+            <label>Fonte de dados
+              <select id="searchSource">
+                <option value="fixture">Base local de teste</option>
+                <option value="mercadolivre">Mercado Livre (API oficial)</option>
+                <option value="csv_upload">CSV autorizado</option>
+                <option value="olx">OLX Imóveis — precisa autorização</option>
+                <option value="zap">ZAP Imóveis — precisa autorização</option>
+                <option value="vivareal">Viva Real — precisa autorização</option>
+                <option value="quintoandar">QuintoAndar — precisa autorização</option>
+                <option value="chavesnamao">Chaves na Mão — precisa autorização</option>
+              </select>
+            </label>
+            <label>Raio máximo
+              <select id="searchRadius">
+                <option value="1000">1 km</option>
+                <option value="2000">2 km</option>
+                <option value="3000">3 km</option>
+                <option value="5000" selected>5 km</option>
+              </select>
+            </label>
+            <label>Operação
+              <select id="searchTransactionType">
+                <option value="sale">Venda</option>
+                <option value="rent">Locação</option>
+              </select>
+            </label>
+            <label>Responsável pela revisão
+              <input id="searchReviewer" value="Avaliador SISAVALIA" maxlength="200" />
+            </label>
+            <label id="searchCsvFileLabel" hidden>CSV autorizado
+              <input id="searchCsvFile" type="file" accept=".csv,text/csv" />
+            </label>
+            <div class="search-engine-summary">
+              <small>Critério atual</small>
+              <strong id="searchCriteriaSummary">Preencha o endereço e as coordenadas do avaliando.</strong>
+            </div>
+            <button id="startSearchBtn" class="primary-button" type="button" disabled>Iniciar busca assistida</button>
+          </div>
+          <p id="searchEngineMessage" class="import-status">Selecione a fonte e confira os dados do avaliando.</p>
+          <div id="searchPreviewResults" class="search-preview-results" hidden aria-live="polite"></div>
+        </section>
+
+        <section id="amostras" class="band">
+          <div class="section-heading">
+            <h2>Amostras de Mercado</h2>
+            <div class="inline-actions">
+              <select id="importMode" class="compact-select" title="Modo de importacao">
+                <option value="replace">Substituir</option>
+                <option value="append">Acrescentar</option>
+              </select>
+              <input id="sampleImportFile" class="file-input" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
+              <button id="importSamplesBtn" class="secondary-button">Importar CSV</button>
+              <button id="downloadExcelTemplateBtn" class="ghost-button">Modelo Excel</button>
+              <button id="downloadTemplateBtn" class="ghost-button">Modelo CSV</button>
+              <button id="addSampleBtn" class="secondary-button">Adicionar</button>
+              <button id="clearSamplesBtn" class="ghost-button">Limpar</button>
+            </div>
+          </div>
+          <p id="importStatus" class="import-status">Baixe o Modelo Excel, preencha e salve uma copia em CSV UTF-8 para importar: fonte, preco, area, local, padrao, conservacao.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fonte / endereco</th>
+                  <th>Preco (R$)</th>
+                  <th>Area (m2)</th>
+                  <th>Local</th>
+                  <th>Padrao</th>
+                  <th>Conserv.</th>
+                  <th>Foto</th>
+                  <th>Status</th>
+                  <th>Motivo</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="samplesBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="modelo" class="band">
+          <div class="section-heading">
+            <h2>Modelo Inferencial</h2>
+            <button id="runModelBtn" class="primary-button">Calcular</button>
+          </div>
+          <div class="variable-panel">
+            <div>
+              <h3>Variaveis e Transformacoes</h3>
+              <p>Selecione as variaveis independentes e a forma de escala usada na regressao.</p>
+              <label class="model-target-control" for="modelTarget">
+                Variavel dependente
+                <select id="modelTarget">
+                  <option value="unit">ln(VALOR UNITARIO)</option>
+                  <option value="total">ln(PRECO TOTAL)</option>
+                </select>
+              </label>
+            </div>
+            <div id="variableControls" class="variable-controls"></div>
+          </div>
+          <details class="variable-catalog-panel" open>
+            <summary>Catálogo técnico das variáveis</summary>
+            <div id="variableCatalog" class="variable-catalog-grid"></div>
+          </details>
+          <div class="metrics-grid">
+            <div class="metric"><small>Dados utilizados</small><strong id="metricN">0</strong></div>
+            <div class="metric"><small>Variaveis</small><strong id="metricK">0</strong></div>
+            <div class="metric"><small>R2 ajustado</small><strong id="metricR2">-</strong></div>
+            <div class="metric"><small>Valor adotado</small><strong id="metricValue">-</strong></div>
+            <div class="metric"><small>Fundamentacao</small><strong id="metricFoundation">-</strong></div>
+            <div class="metric"><small>Precisao</small><strong id="metricPrecision">-</strong></div>
+          </div>
+          <div id="tsProjectionPanel" class="ts-projection-panel">
+            <div class="section-heading compact">
+              <div>
+                <h3>Projeção TS-SISREG</h3>
+                <p>Leitura técnica do valor projetado, IC 80%, campo de arbítrio e valor adotado.</p>
+              </div>
+              <span id="tsProjectionStatus" class="pill">Aguardando modelo</span>
+            </div>
+            <div class="ts-projection-grid">
+              <article class="ts-projection-card primary">
+                <small>Valor central inferido</small>
+                <strong id="tsProjectionCentral">-</strong>
+                <span>Tendência central do modelo</span>
+              </article>
+              <article class="ts-projection-card">
+                <small>IC 80%</small>
+                <strong id="tsProjectionIc80">-</strong>
+                <span id="tsProjectionAmplitude">Amplitude: -</span>
+              </article>
+              <article class="ts-projection-card">
+                <small>Campo de arbítrio ±15%</small>
+                <strong id="tsProjectionArbitration">-</strong>
+                <span>Faixa auxiliar para arbitramento técnico</span>
+              </article>
+              <article class="ts-projection-card adopted">
+                <small>Valor adotado</small>
+                <strong id="tsProjectionAdopted">-</strong>
+                <span id="tsProjectionAdoptedUnit">-</span>
+              </article>
+            </div>
+            <p id="tsProjectionJustification" class="ts-projection-justification">
+              Calcule o modelo para gerar a projeção.
+            </p>
+          </div>
+          <div class="diagnostic-panel">
+            <div class="section-heading compact">
+              <h3>Diagnostico Estatistico</h3>
+              <span id="diagnosticSummary" class="pill">Aguardando modelo</span>
+            </div>
+            <div id="diagnosticCards" class="diagnostic-grid"></div>
+          </div>
+          <div class="foundation-panel">
+            <div class="section-heading compact">
+              <div>
+                <h3>Enquadramento Normativo</h3>
+                <p>NBR 14653-2:2011 - Tabelas de fundamentacao e precisao</p>
+              </div>
+              <span id="foundationSummary" class="pill">Aguardando evidencias</span>
+            </div>
+            <div class="foundation-evidence-grid">
+              <label>
+                1. Caracterizacao do avaliando
+                <select id="foundationCharacterization">
+                  <option value="0">NAO INFORMADO</option>
+                  <option value="3">COMPLETA - TODAS AS VARIAVEIS ANALISADAS</option>
+                  <option value="2">COMPLETA - VARIAVEIS DO MODELO</option>
+                  <option value="1">SITUACAO PARADIGMA</option>
+                </select>
+              </label>
+              <label>
+                Controle complementar: conferencia dos dados (nao pontuado)
+                <select id="foundationCollection">
+                  <option value="0">NAO INFORMADO</option>
+                  <option value="3">CONFERIDOS PELO AUTOR DO LAUDO</option>
+                  <option value="2">CONFERIDOS POR PROFISSIONAL CREDENCIADO</option>
+                  <option value="1">INFORMACOES DE TERCEIROS</option>
+                </select>
+              </label>
+              <label>
+                3. Identificacao dos dados
+                <select id="foundationIdentification">
+                  <option value="0">NAO INFORMADO</option>
+                  <option value="3">TODOS OS DADOS E VARIAVEIS, COM FOTOS</option>
+                  <option value="2">DADOS E VARIAVEIS UTILIZADOS</option>
+                  <option value="1">IDENTIFICACAO MINIMA DOS DADOS UTILIZADOS</option>
+                </select>
+              </label>
+            </div>
+            <div class="table-wrap foundation-table-wrap">
+              <table class="foundation-table">
+                <thead><tr><th>Item</th><th>Criterio</th><th>Nivel</th><th>Evidencia</th></tr></thead>
+                <tbody id="foundationRows"></tbody>
+              </table>
+            </div>
+            <p id="foundationNote" class="foundation-note"></p>
+          </div>
+          <div class="split">
+            <div>
+              <h3>Checklist ABNT e SisAvalia</h3>
+              <ul id="checklist" class="checklist"></ul>
+            </div>
+            <div>
+              <h3>Equacao e memoria</h3>
+              <pre id="modelReport" class="report-box">Calcule o modelo para ver a memoria.</pre>
+            </div>
+          </div>
+          <div class="charts-panel">
+            <div class="section-heading compact">
+              <h3>Graficos do Modelo</h3>
+              <span class="pill">Referencia TS-Sisreg</span>
+            </div>
+            <div class="charts-grid">
+              <div class="chart-box">
+                <div class="chart-title">Aderencia: observado x calculado</div>
+                <canvas id="adherenceChart" width="640" height="360"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-title">Residuos padronizados</div>
+                <canvas id="residualChart" width="640" height="360"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-title">Distribuicao dos residuos</div>
+                <canvas id="normalityChart" width="640" height="360"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-title">Matriz de correlacoes</div>
+                <canvas id="correlationChart" width="640" height="360"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="laudo" class="band">
+          <div class="section-heading">
+            <h2>Previa do Laudo</h2>
+            <span class="pill">Uso interno</span>
+          </div>
+          <div class="review-panel" aria-labelledby="reviewTitle">
+            <div class="review-header">
+              <div>
+                <h3 id="reviewTitle">Revisao Automatica do Laudo</h3>
+                <p id="reviewMessage">Verificando consistencia cadastral, amostral e estatistica.</p>
+              </div>
+              <button id="reviewBtn" class="secondary-button">Revisar agora</button>
+            </div>
+            <div class="review-summary" aria-live="polite">
+              <div class="review-verdict">
+                <small>Parecer automatico</small>
+                <strong id="reviewVerdict">Em analise</strong>
+              </div>
+              <div class="review-counter critical"><strong id="reviewCriticalCount">0</strong><span>Criticas</span></div>
+              <div class="review-counter warning"><strong id="reviewWarningCount">0</strong><span>Alertas</span></div>
+              <div class="review-counter manual"><strong id="reviewManualCount">0</strong><span>Manuais</span></div>
+            </div>
+            <div id="reviewResults" class="review-results"></div>
+          </div>
+          <article id="reportPreview" class="report-preview"></article>
+          <section class="attachment-panel" aria-labelledby="attachmentPanelTitle">
+            <div class="section-heading compact">
+              <div>
+                <h3 id="attachmentPanelTitle">Fotos e mapa do laudo</h3>
+                <p>Anexe imagens para compor automaticamente a documentação fotográfica e o mapa/croqui.</p>
+              </div>
+              <span class="pill">Anexos locais</span>
+            </div>
+            <div class="attachment-actions">
+              <label class="file-action">Adicionar fotos
+                <input id="photoUploadInput" type="file" accept="image/*" multiple hidden />
+              </label>
+              <label class="file-action secondary">Adicionar mapa/croqui
+                <input id="mapUploadInput" type="file" accept="image/*" hidden />
+              </label>
+              <button id="clearAttachmentsBtn" class="ghost-button" type="button">Limpar anexos</button>
+            </div>
+            <p id="attachmentStatus" class="project-status">Nenhuma foto ou mapa anexado.</p>
+            <div id="attachmentGallery" class="attachment-gallery"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="src/app.js?v=20260710-delete-photo"></script>
+    <script src="src/search-engine.js?v=20260702-2010"></script>
+    <script src="src/demand-control.js?v=20260703-5"></script>
+  </body>
+</html>

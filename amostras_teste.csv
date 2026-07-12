@@ -1,0 +1,6 @@
+codigo;fonte;preco;area;latitude;longitude;tipo_imovel;operacao;quartos;banheiros;vagas;endereco
+A-1;Teste Autorizado;450000;50;-13.012788;-38.490173;Apartamento;Venda;1;1;1;Amostra teste proxima 1
+A-2;Teste Autorizado;465000;52;-13.012950;-38.490020;Apartamento;Venda;1;1;1;Amostra teste proxima 2
+A-3;Teste Autorizado;520000;60;-13.013250;-38.489850;Apartamento;Venda;1;1;1;Amostra teste proxima 3
+A-4;Teste Autorizado;390000;45;-13.011900;-38.491000;Apartamento;Venda;1;1;0;Amostra teste proxima 4
+A-5;Teste Autorizado;780000;95;-13.016500;-38.493200;Apartamento;Venda;2;2;1;Amostra teste maior
