@@ -25,6 +25,23 @@ class DemandRepository:
     def _digits(value: str | None) -> str:
         return "".join(character for character in str(value or "") if character.isdigit())
 
+    def ensure_demand_proponent_columns(self) -> None:
+        """Garante compatibilidade quando o Render sobe código novo antes da migration.
+
+        O deploy correto executa as migrations, mas em ambientes manuais pode acontecer
+        de o frontend/backend novo subir com um banco ainda sem as colunas adicionadas
+        para pesquisa por proponente. Esse ajuste é idempotente e evita que a lista
+        inteira de demandas pare por falta dessas colunas.
+        """
+        with connect(self.database_url) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                ALTER TABLE demands
+                  ADD COLUMN IF NOT EXISTS proponent_name text,
+                  ADD COLUMN IF NOT EXISTS proponent_cpf text
+                """
+            )
+
     def list_client_banks(self) -> list[dict[str, Any]]:
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT * FROM client_banks WHERE active ORDER BY name")
@@ -77,6 +94,7 @@ class DemandRepository:
             return cursor.fetchone()
 
     def list_demands(self, *, limit: int = 200, search: str | None = None) -> list[dict[str, Any]]:
+        self.ensure_demand_proponent_columns()
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
             raw_search = search.strip() if search and search.strip() else None
             search_term = f"%{raw_search}%" if raw_search else None
@@ -138,6 +156,7 @@ class DemandRepository:
             return rows
 
     def create_demand(self, payload: DemandInput, *, user_id: str | None = None) -> dict[str, Any]:
+        self.ensure_demand_proponent_columns()
         data = payload.model_dump()
         data["os_number"] = data["os_number"].strip()
         data["proponent_name"] = data["proponent_name"].strip() if data.get("proponent_name") else None
@@ -200,6 +219,7 @@ class DemandRepository:
             return demand
 
     def update_demand(self, demand_id: UUID, payload: DemandInput, *, user_id: str | None = None) -> dict[str, Any]:
+        self.ensure_demand_proponent_columns()
         data = payload.model_dump()
         data.update({"id": demand_id, "os_number": data["os_number"].strip(), "city": data["city"].strip(), "state_code": data["state_code"].upper()})
         data["proponent_name"] = data["proponent_name"].strip() if data.get("proponent_name") else None
