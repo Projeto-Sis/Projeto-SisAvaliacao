@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -10,6 +11,7 @@ from .demand_schemas import DemandInput, EngineerInput, PartnerInput, PaymentInp
 
 
 router = APIRouter(prefix="/api/v1/demand-control", tags=["Controle de Demanda"])
+logger = logging.getLogger(__name__)
 
 
 def repository() -> DemandRepository:
@@ -59,13 +61,18 @@ def demands(
     limit: int = Query(default=200, ge=1, le=1000),
     search: str | None = Query(default=None, max_length=200),
 ) -> dict:
+    repo = repository()
     try:
-        return {"items": repository().list_demands(limit=limit, search=search)}
+        return {"items": repo.list_demands(limit=limit, search=search)}
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Não foi possível listar/pesquisar demandas. Verifique se o deploy executou as migrações do PostgreSQL.",
-        ) from exc
+        logger.exception("Falha ao listar/pesquisar demandas")
+        return {
+            "items": [],
+            "warning": (
+                "A lista de demandas foi carregada em modo seguro. "
+                f"Detalhe técnico: {type(exc).__name__}: {exc}"
+            ),
+        }
 
 
 @router.post("/demands", status_code=201)

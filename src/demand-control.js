@@ -265,6 +265,9 @@
 
       if (demandList.status === "fulfilled") {
         renderDemands(demandList.value.items);
+        if (demandList.value.warning) {
+          tableBody.innerHTML = `<tr><td colspan="9">${escapeHtml(demandList.value.warning)}</td></tr>`;
+        }
       } else {
         tableBody.innerHTML = '<tr><td colspan="9">Lista de demandas indisponível no momento. Cadastre uma nova demanda ou tente recarregar.</td></tr>';
       }
@@ -276,7 +279,7 @@
         financialEmpty.hidden = false;
         financialEmpty.textContent = "Reinicie o backend para carregar a evolução financeira mensal.";
       }
-      const partialFailures = [engineers, partners, dashboard, demandList].filter((result) => result.status === "rejected").length;
+      const partialFailures = [engineers, partners, dashboard, demandList].filter((result) => result.status === "rejected").length + (demandList.status === "fulfilled" && demandList.value.warning ? 1 : 0);
       message.textContent = partialFailures
         ? "Bancos carregados. Algumas áreas auxiliares ainda não responderam; recarregue após o deploy estabilizar."
         : "Controle de Demanda conectado.";
