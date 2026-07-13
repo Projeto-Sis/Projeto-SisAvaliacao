@@ -182,7 +182,7 @@
       <div class="evaluation-demand-match">
         <div>
           <strong>${escapeHtml(item.bank_name)} · OS ${escapeHtml(item.os_number)}</strong>
-          <small>${escapeHtml(item.city)}/${escapeHtml(item.state_code)} · Recebida em ${escapeHtml(item.arrival_date)} · ${escapeHtml(item.demand_status)}</small>
+          <small>${escapeHtml(item.city)}/${escapeHtml(item.state_code)} · Recebida em ${escapeHtml(item.arrival_date)} · ${escapeHtml(item.proponent_name || "Proponente não informado")} · ${escapeHtml(item.demand_status)}</small>
         </div>
         <button type="button" class="primary-button" data-use-demand="${item.id}">Usar nesta avaliação</button>
       </div>`).join("");
@@ -192,6 +192,8 @@
     const mappings = {
       osNumber: demand.os_number,
       osDate: demand.arrival_date,
+      proponent: demand.proponent_name,
+      cpfCnpj: demand.proponent_cpf,
       city: demand.city,
       state: demand.state_code,
       propertyNotes: demand.notes,
@@ -224,7 +226,7 @@
       evaluationDemandMessage.textContent = `${result.items.length} demanda(s) encontrada(s).`;
       evaluationDemandMessage.className = "project-status ok";
     } catch (error) {
-      evaluationDemandMessage.textContent = error.message;
+      evaluationDemandMessage.textContent = `${error.message} Se a API de bancos funciona, aguarde o deploy concluir e tente novamente.`;
       evaluationDemandMessage.className = "project-status fail";
     } finally {
       searchEvaluationDemandButton.disabled = false;
@@ -318,6 +320,8 @@
         client_bank_id: value("demandBank"),
         os_number: value("demandOsNumber"),
         final_os_number: value("demandFinalOsNumber") || null,
+        proponent_name: value("demandProponentName") || null,
+        proponent_cpf: value("demandProponentCpf") || null,
         arrival_date: value("demandArrivalDate"),
         client_deadline: value("demandDeadline") || null,
         deadline_days: Number(value("demandDeadlineDays")) || 7,
@@ -425,7 +429,8 @@
       editingDemandId = demand.id;
       const mappings = {
         demandBank: demand.client_bank_id, demandOsNumber: demand.os_number,
-        demandFinalOsNumber: demand.final_os_number, demandArrivalDate: demand.arrival_date,
+        demandFinalOsNumber: demand.final_os_number, demandProponentName: demand.proponent_name,
+        demandProponentCpf: demand.proponent_cpf, demandArrivalDate: demand.arrival_date,
         demandDeadlineDays: demand.deadline_days, demandDeadline: demand.client_deadline,
         demandServiceValue: demand.service_value, demandEngineer: demand.engineer_id,
         demandArtStatus: demand.art_status, demandPartner: demand.partner_id,
@@ -445,7 +450,7 @@
     if (!button) return;
     const demand = demands.find((item) => item.id === button.dataset.createEvaluation);
     if (!demand) return;
-    const mappings = { osNumber: demand.os_number, osDate: demand.arrival_date, city: demand.city, state: demand.state_code };
+    const mappings = { osNumber: demand.os_number, osDate: demand.arrival_date, proponent: demand.proponent_name, cpfCnpj: demand.proponent_cpf, city: demand.city, state: demand.state_code };
     Object.entries(mappings).forEach(([id, fieldValue]) => {
       const field = document.querySelector(`#${id}`);
       if (field && !field.value) field.value = fieldValue || "";

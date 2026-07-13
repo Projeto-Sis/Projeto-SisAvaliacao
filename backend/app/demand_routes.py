@@ -59,7 +59,13 @@ def demands(
     limit: int = Query(default=200, ge=1, le=1000),
     search: str | None = Query(default=None, max_length=200),
 ) -> dict:
-    return {"items": repository().list_demands(limit=limit, search=search)}
+    try:
+        return {"items": repository().list_demands(limit=limit, search=search)}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível listar/pesquisar demandas. Verifique se o deploy executou as migrações do PostgreSQL.",
+        ) from exc
 
 
 @router.post("/demands", status_code=201)

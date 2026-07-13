@@ -161,6 +161,8 @@
               <label>Banco / cliente<select id="demandBank" required></select></label>
               <label>Número da OS<input id="demandOsNumber" required /></label>
               <label>Número final da OS<input id="demandFinalOsNumber" /></label>
+              <label>Proponente<input id="demandProponentName" /></label>
+              <label>CPF do proponente<input id="demandProponentCpf" inputmode="numeric" placeholder="Somente números ou formatado" /></label>
               <label>Data de chegada<input id="demandArrivalDate" type="date" required /></label>
               <label>Prazo em dias<input id="demandDeadlineDays" type="number" min="1" value="7" /></label>
               <label>Prazo definido<input id="demandDeadline" type="date" /></label>
@@ -236,10 +238,10 @@
             <div>
               <span class="financial-kicker">Integração com a gestão</span>
               <h3>Localizar OS cadastrada</h3>
-              <p>Pesquise pelo número da OS, banco, cidade ou UF para preencher a avaliação.</p>
+              <p>Pesquise pelo número da OS, pelos 4 últimos números, CPF do proponente, banco, cidade ou UF para preencher a avaliação.</p>
             </div>
             <div class="evaluation-demand-controls">
-              <label>Pesquisar demanda<input id="evaluationDemandSearch" placeholder="Ex.: 260099518, Banco do Brasil, Salvador" /></label>
+              <label>Pesquisar demanda<input id="evaluationDemandSearch" placeholder="Ex.: 9518, 260099518, CPF, Banco do Brasil" /></label>
               <button id="searchEvaluationDemandBtn" class="secondary-button" type="button">Pesquisar OS</button>
             </div>
             <div id="evaluationDemandMatches" class="evaluation-demand-matches" hidden></div>

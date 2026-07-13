@@ -21,6 +21,10 @@ class DemandRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
+    @staticmethod
+    def _digits(value: str | None) -> str:
+        return "".join(character for character in str(value or "") if character.isdigit())
+
     def list_client_banks(self) -> list[dict[str, Any]]:
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT * FROM client_banks WHERE active ORDER BY name")
@@ -74,7 +78,12 @@ class DemandRepository:
 
     def list_demands(self, *, limit: int = 200, search: str | None = None) -> list[dict[str, Any]]:
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
-            search_term = f"%{search.strip()}%" if search and search.strip() else None
+            raw_search = search.strip() if search and search.strip() else None
+            search_term = f"%{raw_search}%" if raw_search else None
+            search_digits = self._digits(raw_search)
+            digit_term = f"%{search_digits}%" if search_digits else None
+            final_four = search_digits[-4:] if len(search_digits) >= 4 else None
+            final_four_term = f"%{final_four}" if final_four else None
             cursor.execute(
                 """
                 SELECT d.*, cb.name AS bank_name, p.name AS partner_name, e.name AS engineer_name,
@@ -84,11 +93,36 @@ class DemandRepository:
                 LEFT JOIN partners p ON p.id = d.partner_id
                 LEFT JOIN engineers e ON e.id = d.engineer_id
                 WHERE (%s IS NULL OR d.os_number ILIKE %s OR COALESCE(d.final_os_number, '') ILIKE %s
-                       OR cb.name ILIKE %s OR d.city ILIKE %s OR d.state_code ILIKE %s)
+                       OR COALESCE(d.proponent_name, '') ILIKE %s
+                       OR COALESCE(d.proponent_cpf, '') ILIKE %s
+                       OR regexp_replace(COALESCE(d.proponent_cpf, ''), '[^0-9]', '', 'g') LIKE %s
+                       OR regexp_replace(COALESCE(d.os_number, ''), '[^0-9]', '', 'g') LIKE %s
+                       OR regexp_replace(COALESCE(d.final_os_number, ''), '[^0-9]', '', 'g') LIKE %s
+                       OR (%s IS NOT NULL AND regexp_replace(COALESCE(d.os_number, ''), '[^0-9]', '', 'g') LIKE %s)
+                       OR (%s IS NOT NULL AND regexp_replace(COALESCE(d.final_os_number, ''), '[^0-9]', '', 'g') LIKE %s)
+                       OR cb.name ILIKE %s OR cb.acronym ILIKE %s OR d.city ILIKE %s OR d.state_code ILIKE %s)
                 ORDER BY d.client_deadline, d.created_at DESC
                 LIMIT %s
                 """,
-                (search_term, search_term, search_term, search_term, search_term, search_term, limit),
+                (
+                    search_term,
+                    search_term,
+                    search_term,
+                    search_term,
+                    search_term,
+                    digit_term,
+                    digit_term,
+                    digit_term,
+                    final_four,
+                    final_four_term,
+                    final_four,
+                    final_four_term,
+                    search_term,
+                    search_term,
+                    search_term,
+                    search_term,
+                    limit,
+                ),
             )
             rows = cursor.fetchall()
             for row in rows:
@@ -106,6 +140,8 @@ class DemandRepository:
     def create_demand(self, payload: DemandInput, *, user_id: str | None = None) -> dict[str, Any]:
         data = payload.model_dump()
         data["os_number"] = data["os_number"].strip()
+        data["proponent_name"] = data["proponent_name"].strip() if data.get("proponent_name") else None
+        data["proponent_cpf"] = data["proponent_cpf"].strip() if data.get("proponent_cpf") else None
         data["city"] = data["city"].strip()
         data["state_code"] = data["state_code"].upper()
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
@@ -121,12 +157,14 @@ class DemandRepository:
                 cursor.execute(
                     """
                     INSERT INTO demands
-                      (client_bank_id, os_number, final_os_number, arrival_date, client_deadline, deadline_days,
+                      (client_bank_id, os_number, final_os_number, proponent_name, proponent_cpf,
+                       arrival_date, client_deadline, deadline_days,
                        service_value, engineer_id, art_status, partner_id, partner_fee, city, state_code,
                        delivered_to_engineer_at, system_finished_at, demand_status, partner_status,
                        system_status, payment_status, notes, evaluation_id, import_origin)
                     VALUES
-                      (%(client_bank_id)s, %(os_number)s, %(final_os_number)s, %(arrival_date)s,
+                      (%(client_bank_id)s, %(os_number)s, %(final_os_number)s,
+                       %(proponent_name)s, %(proponent_cpf)s, %(arrival_date)s,
                        %(client_deadline)s, %(deadline_days)s, %(service_value)s, %(engineer_id)s,
                        %(art_status)s, %(partner_id)s, %(partner_fee)s, %(city)s, %(state_code)s,
                        %(delivered_to_engineer_at)s, %(system_finished_at)s, %(demand_status)s,
@@ -164,6 +202,8 @@ class DemandRepository:
     def update_demand(self, demand_id: UUID, payload: DemandInput, *, user_id: str | None = None) -> dict[str, Any]:
         data = payload.model_dump()
         data.update({"id": demand_id, "os_number": data["os_number"].strip(), "city": data["city"].strip(), "state_code": data["state_code"].upper()})
+        data["proponent_name"] = data["proponent_name"].strip() if data.get("proponent_name") else None
+        data["proponent_cpf"] = data["proponent_cpf"].strip() if data.get("proponent_cpf") else None
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute("SELECT * FROM demands WHERE id = %s FOR UPDATE", (demand_id,))
             previous = cursor.fetchone()
@@ -180,6 +220,7 @@ class DemandRepository:
                     """
                     UPDATE demands SET
                       client_bank_id=%(client_bank_id)s, os_number=%(os_number)s, final_os_number=%(final_os_number)s,
+                      proponent_name=%(proponent_name)s, proponent_cpf=%(proponent_cpf)s,
                       arrival_date=%(arrival_date)s, client_deadline=%(client_deadline)s, deadline_days=%(deadline_days)s,
                       service_value=%(service_value)s, engineer_id=%(engineer_id)s, art_status=%(art_status)s,
                       partner_id=%(partner_id)s, partner_fee=%(partner_fee)s, city=%(city)s, state_code=%(state_code)s,

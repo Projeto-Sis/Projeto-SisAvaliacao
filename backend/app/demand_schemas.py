@@ -40,6 +40,8 @@ class DemandInput(BaseModel):
     client_bank_id: UUID
     os_number: str = Field(min_length=1, max_length=200)
     final_os_number: str | None = Field(default=None, max_length=200)
+    proponent_name: str | None = Field(default=None, max_length=200)
+    proponent_cpf: str | None = Field(default=None, max_length=20)
     arrival_date: date
     client_deadline: date | None = None
     deadline_days: int | None = Field(default=None, ge=1, le=365)
