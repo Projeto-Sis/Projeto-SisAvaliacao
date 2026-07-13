@@ -233,17 +233,40 @@
 
   async function loadModule() {
     try {
-      const [banks, engineers, partners, dashboard, demandList] = await Promise.all([
-        request("/client-banks"), request("/engineers"), request("/partners"), request("/dashboard"), request("/demands"),
-      ]);
+      const banks = await request("/client-banks");
       bankSelect.innerHTML = options(banks.items);
-      engineerSelect.innerHTML = options(engineers.items, "Não definido");
-      partnerSelect.innerHTML = options(partners.items, "Não definido");
       saveButton.disabled = false;
-      renderEngineers(engineers.items);
-      renderPartners(partners.items);
-      renderDashboard(dashboard);
-      renderDemands(demandList.items);
+
+      const [engineers, partners, dashboard, demandList] = await Promise.allSettled([
+        request("/engineers"), request("/partners"), request("/dashboard"), request("/demands"),
+      ]);
+
+      if (engineers.status === "fulfilled") {
+        engineerSelect.innerHTML = options(engineers.value.items, "Não definido");
+        renderEngineers(engineers.value.items);
+      } else {
+        engineerSelect.innerHTML = '<option value="">Não definido</option>';
+        engineerRegistryList.innerHTML = '<div class="registry-empty">Não foi possível carregar engenheiros agora.</div>';
+      }
+
+      if (partners.status === "fulfilled") {
+        partnerSelect.innerHTML = options(partners.value.items, "Não definido");
+        renderPartners(partners.value.items);
+      } else {
+        partnerSelect.innerHTML = '<option value="">Não definido</option>';
+        partnerRegistryList.innerHTML = '<div class="registry-empty">Não foi possível carregar parceiros agora.</div>';
+      }
+
+      if (dashboard.status === "fulfilled") {
+        renderDashboard(dashboard.value);
+      }
+
+      if (demandList.status === "fulfilled") {
+        renderDemands(demandList.value.items);
+      } else {
+        tableBody.innerHTML = '<tr><td colspan="9">Lista de demandas indisponível no momento. Cadastre uma nova demanda ou tente recarregar.</td></tr>';
+      }
+
       try {
         const financial = await request("/financial/monthly?months=12");
         renderFinancialEvolution(financial.items);
@@ -251,8 +274,11 @@
         financialEmpty.hidden = false;
         financialEmpty.textContent = "Reinicie o backend para carregar a evolução financeira mensal.";
       }
-      message.textContent = "Controle de Demanda conectado.";
-      message.className = "project-status ok";
+      const partialFailures = [engineers, partners, dashboard, demandList].filter((result) => result.status === "rejected").length;
+      message.textContent = partialFailures
+        ? "Bancos carregados. Algumas áreas auxiliares ainda não responderam; recarregue após o deploy estabilizar."
+        : "Controle de Demanda conectado.";
+      message.className = partialFailures ? "project-status warn" : "project-status ok";
     } catch (error) {
       bankSelect.innerHTML = '<option value="">Backend indisponível — reinicie para carregar bancos</option>';
       engineerSelect.innerHTML = '<option value="">Backend indisponível</option>';
