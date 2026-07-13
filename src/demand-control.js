@@ -35,6 +35,7 @@
   let demands = [];
   let financialItems = [];
   let evaluationSearchResults = [];
+  let dashboardSummary = {};
   let editingDemandId = null;
 
   function escapeHtml(value) {
@@ -58,6 +59,7 @@
   }
 
   function renderDashboard(data) {
+    dashboardSummary = data || {};
     panel.querySelectorAll("[data-demand-metric]").forEach((element) => {
       element.textContent = Number(data[element.dataset.demandMetric] || 0).toLocaleString("pt-BR");
     });
@@ -106,30 +108,35 @@
       total: {
         title: "Total de demandas",
         description: "Todas as demandas cadastradas no Controle de Demanda.",
+        dashboardKey: "total_demands",
         filter: () => true,
         value: (items) => `${items.length.toLocaleString("pt-BR")} demanda(s)`,
       },
       overdue: {
         title: "Demandas fora do prazo",
         description: "Demandas cujo prazo calculado já foi atingido ou ultrapassado e ainda não estão finalizadas.",
+        dashboardKey: "overdue",
         filter: (item) => item.deadline_status === "Fora do prazo",
         value: (items) => `${items.length.toLocaleString("pt-BR")} demanda(s) fora do prazo`,
       },
       pending_art: {
         title: "ART pendente",
         description: "Demandas com status de ART marcado como pendente.",
+        dashboardKey: "pending_art",
         filter: (item) => item.art_status === "Pendente",
         value: (items) => `${items.length.toLocaleString("pt-BR")} ART(s) pendente(s)`,
       },
       pending_payment: {
         title: "Pagamento pendente",
         description: "Demandas com pagamento não realizado ou parcial.",
+        dashboardKey: "pending_payment",
         filter: (item) => ["Não realizado", "Parcial"].includes(item.payment_status),
         value: (items) => `${items.length.toLocaleString("pt-BR")} pagamento(s) pendente(s)`,
       },
       service_value: {
         title: "Valor dos serviços",
         description: "Composição do valor bruto dos serviços cadastrados.",
+        dashboardMoneyKey: "total_service_value",
         filter: (item) => Number(item.service_value || 0) > 0,
         value: (items) => money(items.reduce((total, item) => total + Number(item.service_value || 0), 0)),
         lineValue: (item) => money(item.service_value),
@@ -137,6 +144,7 @@
       partner_fees: {
         title: "Honorários de parceiros",
         description: "Composição dos honorários de parceiros vinculados às demandas.",
+        dashboardMoneyKey: "total_partner_fees",
         filter: (item) => Number(item.partner_fee || 0) > 0,
         value: (items) => money(items.reduce((total, item) => total + Number(item.partner_fee || 0), 0)),
         lineValue: (item) => money(item.partner_fee),
@@ -149,11 +157,15 @@
     const config = drilldownConfig(type);
     const source = Array.isArray(demands) ? demands : [];
     const items = source.filter(config.filter);
+    const dashboardValue = config.dashboardMoneyKey
+      ? money(dashboardSummary[config.dashboardMoneyKey])
+      : `${Number(dashboardSummary[config.dashboardKey] || 0).toLocaleString("pt-BR")} registro(s)`;
+    const summaryValue = source.length ? config.value(items) : dashboardValue;
     demandDrilldownTitle.textContent = config.title;
-    demandDrilldownSummary.textContent = `${config.description} Total do extrato: ${config.value(items)}.`;
+    demandDrilldownSummary.textContent = `${config.description} Total do indicador: ${summaryValue}.`;
 
     if (!source.length) {
-      demandDrilldownList.innerHTML = '<div class="registry-empty">A lista detalhada ainda não foi carregada. Recarregue após o deploy estabilizar ou cadastre a primeira demanda.</div>';
+      demandDrilldownList.innerHTML = '<div class="registry-empty">O resumo foi carregado, mas a lista detalhada ainda não respondeu. Recarregue após o deploy estabilizar; se persistir, verifique a rota de demandas no Render.</div>';
     } else if (!items.length) {
       demandDrilldownList.innerHTML = '<div class="registry-empty">Nenhum registro encontrado para este indicador.</div>';
     } else {

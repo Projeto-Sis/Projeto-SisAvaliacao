@@ -85,6 +85,13 @@ def create_demand(payload: DemandInput, x_sisavalia_user: str | None = Header(de
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/demands/reset")
+def reset_demands(payload: dict, x_sisavalia_user: str | None = Header(default=None)) -> dict:
+    if payload.get("confirmation") != "LIMPAR":
+        raise HTTPException(status_code=422, detail="Confirmação inválida. Digite LIMPAR para zerar as demandas.")
+    return repository().reset_demands(user_id=x_sisavalia_user)
+
+
 @router.post("/demands/{demand_id}")
 def update_demand(demand_id: str, payload: DemandInput, x_sisavalia_user: str | None = Header(default=None)) -> dict:
     try:

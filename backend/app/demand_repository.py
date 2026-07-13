@@ -110,14 +110,14 @@ class DemandRepository:
                 JOIN client_banks cb ON cb.id = d.client_bank_id
                 LEFT JOIN partners p ON p.id = d.partner_id
                 LEFT JOIN engineers e ON e.id = d.engineer_id
-                WHERE (%s IS NULL OR d.os_number ILIKE %s OR COALESCE(d.final_os_number, '') ILIKE %s
+                WHERE (%s::text IS NULL OR d.os_number ILIKE %s OR COALESCE(d.final_os_number, '') ILIKE %s
                        OR COALESCE(d.proponent_name, '') ILIKE %s
                        OR COALESCE(d.proponent_cpf, '') ILIKE %s
                        OR regexp_replace(COALESCE(d.proponent_cpf, ''), '[^0-9]', '', 'g') LIKE %s
                        OR regexp_replace(COALESCE(d.os_number, ''), '[^0-9]', '', 'g') LIKE %s
                        OR regexp_replace(COALESCE(d.final_os_number, ''), '[^0-9]', '', 'g') LIKE %s
-                       OR (%s IS NOT NULL AND regexp_replace(COALESCE(d.os_number, ''), '[^0-9]', '', 'g') LIKE %s)
-                       OR (%s IS NOT NULL AND regexp_replace(COALESCE(d.final_os_number, ''), '[^0-9]', '', 'g') LIKE %s)
+                       OR (%s::text IS NOT NULL AND regexp_replace(COALESCE(d.os_number, ''), '[^0-9]', '', 'g') LIKE %s)
+                       OR (%s::text IS NOT NULL AND regexp_replace(COALESCE(d.final_os_number, ''), '[^0-9]', '', 'g') LIKE %s)
                        OR cb.name ILIKE %s OR cb.acronym ILIKE %s OR d.city ILIKE %s OR d.state_code ILIKE %s)
                 ORDER BY d.client_deadline, d.created_at DESC
                 LIMIT %s
@@ -154,6 +154,40 @@ class DemandRepository:
                     if row["partner_fee"] and row["service_value"] else 0
                 )
             return rows
+
+    def reset_demands(self, *, user_id: str | None = None) -> dict[str, Any]:
+        """Remove demandas e pagamentos vinculados para permitir recadastro limpo.
+
+        A limpeza preserva cadastros estruturais do módulo, como bancos/clientes,
+        parceiros e engenheiros. Ela remove apenas as OS/demandas e os pagamentos
+        criados a partir dessas OS, que são exatamente os dados exibidos nos
+        indicadores do painel.
+        """
+        with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT COUNT(*) AS total FROM demands")
+            demand_total = cursor.fetchone()["total"]
+            cursor.execute("SELECT COUNT(*) AS total FROM payments WHERE demand_id IS NOT NULL")
+            payment_total = cursor.fetchone()["total"]
+            cursor.execute("DELETE FROM payments WHERE demand_id IS NOT NULL")
+            cursor.execute("DELETE FROM demands")
+            cursor.execute(
+                """
+                INSERT INTO demand_audit_events (entity, entity_id, action, new_data, user_id)
+                VALUES ('demand_control', gen_random_uuid(), 'reset_demands', %s::jsonb, %s)
+                """,
+                (
+                    json.dumps(
+                        {
+                            "deleted_demands": demand_total,
+                            "deleted_payments": payment_total,
+                            "scope": "demands_and_linked_payments",
+                        },
+                        default=str,
+                    ),
+                    user_id,
+                ),
+            )
+            return {"deleted_demands": demand_total, "deleted_payments": payment_total}
 
     def create_demand(self, payload: DemandInput, *, user_id: str | None = None) -> dict[str, Any]:
         self.ensure_demand_proponent_columns()
