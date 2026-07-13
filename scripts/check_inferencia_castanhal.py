@@ -3,13 +3,61 @@ from __future__ import annotations
 import csv
 import math
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 
 CSV_PATH = Path(__file__).resolve().parents[1] / "Amostras_Castanhal_Refinadas_II_III_IMPORTAR_SISAVALIA.csv"
+
+# Atributos do avaliando usados na validacao tecnica de Castanhal.
 SUBJECT_AREA = 106.91
-SUBJECT_STANDARD = 2
+SUBJECT_STANDARD = 2.0
+
+# Modelo validado para esta base:
+# y = ln(valor_unitario)
+# x1 = area
+# x2 = ln(padrao)
+EXPECTED = {
+    "n": 13,
+    "k": 2,
+    "foundation_sample_grade": "II",
+    "regressors_grade": "III",
+    "model_grade": "III",
+    "precision_grade": "III",
+    "micronumerosity_ok": True,
+    "r2": 0.891327,
+    "adj_r2": 0.869592,
+    "p_area": 0.00002286,
+    "p_padrao_ln": 0.00067906,
+    "p_f_modelo": 0.00001516,
+    "unit_estimate": 2626.36,
+    "lower_unit": 2454.22,
+    "upper_unit": 2810.57,
+    "amplitude_percent": 13.57,
+    "total_estimate": 280784.17,
+}
+
+
+@dataclass(frozen=True)
+class InferenceResult:
+    n: int
+    k: int
+    standard_counts: dict[int, int]
+    micronumerosity_ok: bool
+    r2: float
+    adj_r2: float
+    p_area: float
+    p_padrao_ln: float
+    p_f_modelo: float
+    foundation_sample_grade: str
+    regressors_grade: str
+    model_grade: str
+    unit_estimate: float
+    lower_unit: float
+    upper_unit: float
+    amplitude_percent: float
+    precision_grade: str
+    total_estimate: float
 
 
 def num(value: str) -> float:
@@ -19,6 +67,37 @@ def num(value: str) -> float:
     else:
         text = text.replace(",", ".")
     return float(text)
+
+
+def transpose(matrix: list[list[float]]) -> list[list[float]]:
+    return [list(row) for row in zip(*matrix)]
+
+
+def multiply(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+    b_t = transpose(b)
+    return [[sum(left * right for left, right in zip(row, col)) for col in b_t] for row in a]
+
+
+def inverse(matrix: list[list[float]]) -> list[list[float]]:
+    n = len(matrix)
+    augmented = [row[:] + [1.0 if i == j else 0.0 for j in range(n)] for i, row in enumerate(matrix)]
+
+    for i in range(n):
+        pivot = max(range(i, n), key=lambda r: abs(augmented[r][i]))
+        if abs(augmented[pivot][i]) < 1e-12:
+            raise AssertionError("Matriz singular na validacao inferencial.")
+        augmented[i], augmented[pivot] = augmented[pivot], augmented[i]
+
+        divisor = augmented[i][i]
+        augmented[i] = [value / divisor for value in augmented[i]]
+
+        for r in range(n):
+            if r == i:
+                continue
+            factor = augmented[r][i]
+            augmented[r] = [value - factor * pivot_value for value, pivot_value in zip(augmented[r], augmented[i])]
+
+    return [row[n:] for row in augmented]
 
 
 def log_gamma(value: float) -> float:
@@ -43,41 +122,32 @@ def log_gamma(value: float) -> float:
 
 
 def beta_continued_fraction(a: float, b: float, x: float) -> float:
-    max_iterations = 200
-    epsilon = 3e-12
-    minimum = 1e-30
-    qab = a + b
-    qap = a + 1
-    qam = a - 1
+    result = 1.0
     c = 1.0
-    d = 1 - qab * x / qap
+    d = 1 - (a + b) * x / (a + 1)
+    minimum = 1e-30
     if abs(d) < minimum:
         d = minimum
     d = 1 / d
     result = d
-    for m in range(1, max_iterations + 1):
+
+    for m in range(1, 201):
         m2 = 2 * m
-        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
-        d = 1 + aa * d
-        if abs(d) < minimum:
-            d = minimum
-        c = 1 + aa / c
-        if abs(c) < minimum:
-            c = minimum
+        aa = m * (b - m) * x / ((a - 1 + m2) * (a + m2))
+        d = max(abs(1 + aa * d), minimum) * (1 if 1 + aa * d >= 0 else -1)
+        c = max(abs(1 + aa / c), minimum) * (1 if 1 + aa / c >= 0 else -1)
         d = 1 / d
         result *= d * c
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
-        d = 1 + aa * d
-        if abs(d) < minimum:
-            d = minimum
-        c = 1 + aa / c
-        if abs(c) < minimum:
-            c = minimum
+
+        aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + 1 + m2))
+        d = max(abs(1 + aa * d), minimum) * (1 if 1 + aa * d >= 0 else -1)
+        c = max(abs(1 + aa / c), minimum) * (1 if 1 + aa / c >= 0 else -1)
         d = 1 / d
         delta = d * c
         result *= delta
-        if abs(delta - 1) < epsilon:
+        if abs(delta - 1) < 3e-12:
             break
+
     return result
 
 
@@ -100,8 +170,6 @@ def student_two_tailed_p(t_value: float, degrees_of_freedom: int) -> float:
 
 
 def student_critical_two_tailed(alpha: float, degrees_of_freedom: int) -> float:
-    if not (0 < alpha < 1) or degrees_of_freedom <= 0:
-        return math.nan
     lower = 0.0
     upper = 20.0
     for _ in range(100):
@@ -120,91 +188,149 @@ def f_survival(f_value: float, numerator_df: int, denominator_df: int) -> float:
     return regularized_beta(x, denominator_df / 2, numerator_df / 2)
 
 
-def main():
+def grade_by_threshold(value: float, grade_iii: float, grade_ii: float, grade_i: float) -> str:
+    if value <= grade_iii:
+        return "III"
+    if value <= grade_ii:
+        return "II"
+    if value <= grade_i:
+        return "I"
+    return "Nao classificado"
+
+
+def load_approved_rows() -> list[dict[str, str]]:
     with CSV_PATH.open(newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f, delimiter=";"))
+    return [row for row in rows if "rejeitad" not in (row.get("status_validacao") or "").strip().lower()]
 
-    approved = [
-        row
-        for row in rows
-        if "rejeitad" not in (row.get("status_validacao") or "").strip().lower()
-    ]
+
+def calculate() -> InferenceResult:
+    approved = load_approved_rows()
     y = []
     x_rows = []
     standards = []
+
     for row in approved:
         price = num(row["preco"])
         area = num(row["area"])
         standard = num(row["padrao"])
-        unit_value = price / area
-        y.append(math.log(unit_value))
+        y.append(math.log(price / area))
         x_rows.append([1.0, area, math.log(standard)])
         standards.append(int(standard))
 
-    yv = np.array(y, dtype=float)
-    x = np.array(x_rows, dtype=float)
-    n, p = x.shape
+    n = len(y)
+    p = len(x_rows[0])
     k = p - 1
-    beta = np.linalg.inv(x.T @ x) @ x.T @ yv
-    fitted = x @ beta
-    resid = yv - fitted
-    sse = float(resid.T @ resid)
-    df_resid = n - p
-    mse = sse / df_resid
-    sst = float(((yv - yv.mean()).T @ (yv - yv.mean())))
+    xt = transpose(x_rows)
+    xtx_inv = inverse(multiply(xt, x_rows))
+    beta = [row[0] for row in multiply(multiply(xtx_inv, xt), [[value] for value in y])]
+    fitted = [sum(value * beta[index] for index, value in enumerate(row)) for row in x_rows]
+    residuals = [observed - predicted for observed, predicted in zip(y, fitted)]
+    mean_y = sum(y) / n
+    sse = sum(value * value for value in residuals)
+    sst = sum((value - mean_y) ** 2 for value in y)
     ssr = sst - sse
+    df = n - p
+    mse = sse / df
     r2 = 1 - sse / sst
     adj_r2 = 1 - (1 - r2) * (n - 1) / (n - p)
-
-    xtx_inv = np.linalg.inv(x.T @ x)
-    se_beta = np.sqrt(np.diag(mse * xtx_inv))
-    t_stats = beta / se_beta
-    p_values = np.array([student_two_tailed_p(float(t), df_resid) for t in t_stats])
+    standard_errors = [math.sqrt(max(xtx_inv[i][i] * mse, 0)) for i in range(p)]
+    t_stats = [coefficient / error for coefficient, error in zip(beta, standard_errors)]
+    p_values = [student_two_tailed_p(t_value, df) for t_value in t_stats]
     f_stat = (ssr / k) / mse
-    p_f = f_survival(float(f_stat), k, df_resid)
+    p_f = f_survival(f_stat, k, df)
 
-    x0 = np.array([1.0, SUBJECT_AREA, math.log(SUBJECT_STANDARD)])
-    yhat = float(x0 @ beta)
-    leverage = float(x0.T @ xtx_inv @ x0)
-    tcrit80 = student_critical_two_tailed(0.2, df_resid)
-    se_conf = math.sqrt(mse * leverage)
-    unit_estimate = math.exp(yhat)
-    lower = math.exp(yhat - tcrit80 * se_conf)
-    upper = math.exp(yhat + tcrit80 * se_conf)
-    amplitude = (upper - lower) / unit_estimate
+    subject = [1.0, SUBJECT_AREA, math.log(SUBJECT_STANDARD)]
+    log_unit = sum(value * beta[index] for index, value in enumerate(subject))
+    leverage = multiply(multiply([subject], xtx_inv), [[value] for value in subject])[0][0]
+    confidence_se = math.sqrt(max(mse * leverage, 0))
+    t80 = student_critical_two_tailed(0.2, df)
+    unit_estimate = math.exp(log_unit)
+    lower_unit = math.exp(log_unit - t80 * confidence_se)
+    upper_unit = math.exp(log_unit + t80 * confidence_se)
+    amplitude_percent = (upper_unit - lower_unit) / unit_estimate * 100
     total_estimate = unit_estimate * SUBJECT_AREA
 
-    precision_grade = "III" if amplitude <= 0.30 else "II" if amplitude <= 0.40 else "I" if amplitude <= 0.50 else "Nao classificado"
     sample_min_ii = 4 * (k + 1)
     sample_min_iii = 6 * (k + 1)
     foundation_sample_grade = "III" if n >= sample_min_iii else "II" if n >= sample_min_ii else "I"
-    max_regressor_p = max(float(p) for p in p_values[1:])
-    regressors_grade = "III" if max_regressor_p <= 0.10 else "II" if max_regressor_p <= 0.20 else "I" if max_regressor_p <= 0.30 else "Nao classificado"
-    model_grade = "III" if p_f <= 0.01 else "II" if p_f <= 0.02 else "I" if p_f <= 0.05 else "Nao classificado"
-    standard_counts = Counter(standards)
-    micronumerosity_ok = all(count >= 3 for count in standard_counts.values())
+    max_regressor_p = max(p_values[1:])
+    standard_counts = dict(sorted(Counter(standards).items()))
 
+    return InferenceResult(
+        n=n,
+        k=k,
+        standard_counts=standard_counts,
+        micronumerosity_ok=all(count >= 3 for count in standard_counts.values()),
+        r2=r2,
+        adj_r2=adj_r2,
+        p_area=p_values[1],
+        p_padrao_ln=p_values[2],
+        p_f_modelo=p_f,
+        foundation_sample_grade=foundation_sample_grade,
+        regressors_grade=grade_by_threshold(max_regressor_p, 0.10, 0.20, 0.30),
+        model_grade=grade_by_threshold(p_f, 0.01, 0.02, 0.05),
+        unit_estimate=unit_estimate,
+        lower_unit=lower_unit,
+        upper_unit=upper_unit,
+        amplitude_percent=amplitude_percent,
+        precision_grade=grade_by_threshold(amplitude_percent, 30, 40, 50),
+        total_estimate=total_estimate,
+    )
+
+
+def assert_close(name: str, actual: float, expected: float, tolerance: float) -> None:
+    if abs(actual - expected) > tolerance:
+        raise AssertionError(f"{name}: esperado {expected}, obtido {actual}")
+
+
+def validate(result: InferenceResult) -> None:
+    if result.n != EXPECTED["n"]:
+        raise AssertionError(f"n: esperado {EXPECTED['n']}, obtido {result.n}")
+    if result.k != EXPECTED["k"]:
+        raise AssertionError(f"k: esperado {EXPECTED['k']}, obtido {result.k}")
+    if result.standard_counts != {1: 3, 2: 7, 3: 3}:
+        raise AssertionError(f"contagem de padrao inesperada: {result.standard_counts}")
+    for key in ("micronumerosity_ok", "foundation_sample_grade", "regressors_grade", "model_grade", "precision_grade"):
+        actual = getattr(result, key)
+        if actual != EXPECTED[key]:
+            raise AssertionError(f"{key}: esperado {EXPECTED[key]}, obtido {actual}")
+
+    assert_close("r2", result.r2, EXPECTED["r2"], 0.00001)
+    assert_close("r2_ajustado", result.adj_r2, EXPECTED["adj_r2"], 0.00001)
+    assert_close("p_area", result.p_area, EXPECTED["p_area"], 0.0000001)
+    assert_close("p_padrao_ln", result.p_padrao_ln, EXPECTED["p_padrao_ln"], 0.0000001)
+    assert_close("p_f_modelo", result.p_f_modelo, EXPECTED["p_f_modelo"], 0.0000001)
+    assert_close("valor_unitario_estimado", result.unit_estimate, EXPECTED["unit_estimate"], 0.02)
+    assert_close("ic80_unitario_inferior", result.lower_unit, EXPECTED["lower_unit"], 0.02)
+    assert_close("ic80_unitario_superior", result.upper_unit, EXPECTED["upper_unit"], 0.02)
+    assert_close("amplitude_ic80_percentual", result.amplitude_percent, EXPECTED["amplitude_percent"], 0.01)
+    assert_close("valor_total_estimado", result.total_estimate, EXPECTED["total_estimate"], 0.05)
+
+
+def main() -> None:
+    result = calculate()
+    validate(result)
+    print("VALIDACAO INFERENCIAL CASTANHAL: OK")
     print(f"arquivo={CSV_PATH}")
-    print(f"n={n}")
-    print(f"k={k}")
-    print(f"min_grau_II={sample_min_ii}")
-    print(f"min_grau_III={sample_min_iii}")
-    print(f"contagem_padrao={dict(sorted(standard_counts.items()))}")
-    print(f"micronumerosidade_padrao_ok={micronumerosity_ok}")
-    print(f"r2={r2:.6f}")
-    print(f"r2_ajustado={adj_r2:.6f}")
-    print(f"p_area={p_values[1]:.8f}")
-    print(f"p_padrao_ln={p_values[2]:.8f}")
-    print(f"p_f_modelo={p_f:.8f}")
-    print(f"grau_amostra_por_quantidade={foundation_sample_grade}")
-    print(f"grau_regressores_por_significancia={regressors_grade}")
-    print(f"grau_modelo_por_f={model_grade}")
-    print(f"valor_unitario_estimado={unit_estimate:.2f}")
-    print(f"ic80_unitario_inferior={lower:.2f}")
-    print(f"ic80_unitario_superior={upper:.2f}")
-    print(f"amplitude_ic80={amplitude:.2%}")
-    print(f"grau_precisao={precision_grade}")
-    print(f"valor_total_estimado={total_estimate:.2f}")
+    print(f"n={result.n}")
+    print(f"k={result.k}")
+    print(f"contagem_padrao={result.standard_counts}")
+    print(f"micronumerosidade_padrao_ok={result.micronumerosity_ok}")
+    print(f"r2={result.r2:.6f}")
+    print(f"r2_ajustado={result.adj_r2:.6f}")
+    print(f"p_area={result.p_area:.8f}")
+    print(f"p_padrao_ln={result.p_padrao_ln:.8f}")
+    print(f"p_f_modelo={result.p_f_modelo:.8f}")
+    print(f"grau_amostra_por_quantidade={result.foundation_sample_grade}")
+    print(f"grau_regressores_por_significancia={result.regressors_grade}")
+    print(f"grau_modelo_por_f={result.model_grade}")
+    print(f"valor_unitario_estimado={result.unit_estimate:.2f}")
+    print(f"ic80_unitario_inferior={result.lower_unit:.2f}")
+    print(f"ic80_unitario_superior={result.upper_unit:.2f}")
+    print(f"amplitude_ic80={result.amplitude_percent:.2f}%")
+    print(f"grau_precisao={result.precision_grade}")
+    print(f"valor_total_estimado={result.total_estimate:.2f}")
 
 
 if __name__ == "__main__":

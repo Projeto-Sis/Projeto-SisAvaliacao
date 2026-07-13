@@ -22,6 +22,28 @@ Validar automaticamente:
 - alertas de outliers;
 - multicolinearidade.
 
+Comando de validacao automatica da base Castanhal:
+
+```bash
+python3 scripts/check_inferencia_castanhal.py
+```
+
+Resultado esperado:
+
+```text
+VALIDACAO INFERENCIAL CASTANHAL: OK
+n=13
+k=2
+grau_amostra_por_quantidade=II
+grau_regressores_por_significancia=III
+grau_modelo_por_f=III
+grau_precisao=III
+```
+
+Esse teste deve ser executado antes de publicar nova versao no GitHub/Render
+quando houver alteracao no motor estatistico, nas amostras de referencia ou
+nas regras de enquadramento.
+
 ## 2. Testes de amostras
 
 Validar:

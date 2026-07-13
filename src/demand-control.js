@@ -239,6 +239,7 @@
       bankSelect.innerHTML = options(banks.items);
       engineerSelect.innerHTML = options(engineers.items, "Não definido");
       partnerSelect.innerHTML = options(partners.items, "Não definido");
+      saveButton.disabled = false;
       renderEngineers(engineers.items);
       renderPartners(partners.items);
       renderDashboard(dashboard);
@@ -253,7 +254,12 @@
       message.textContent = "Controle de Demanda conectado.";
       message.className = "project-status ok";
     } catch (error) {
-      message.textContent = error.message;
+      bankSelect.innerHTML = '<option value="">Backend indisponível — reinicie para carregar bancos</option>';
+      engineerSelect.innerHTML = '<option value="">Backend indisponível</option>';
+      partnerSelect.innerHTML = '<option value="">Backend indisponível</option>';
+      tableBody.innerHTML = '<tr><td colspan="9">Não foi possível carregar as demandas. Reinicie o backend e recarregue a página.</td></tr>';
+      saveButton.disabled = true;
+      message.textContent = `${error.message} Reinicie o backend e recarregue o SISAVALIA.`;
       message.className = "project-status fail";
     }
   }
