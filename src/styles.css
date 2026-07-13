@@ -1762,11 +1762,66 @@ label { color: #52647a; font-weight: 600; }
   border-top: 4px solid var(--cyan);
   border-radius: 14px;
   box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .demand-dashboard article:nth-child(2),
 .demand-dashboard article:nth-child(4) { border-top-color: var(--amber); }
+.demand-dashboard article:hover,
+.demand-dashboard article:focus {
+  outline: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(7, 59, 114, 0.13);
+}
+.demand-dashboard article.active {
+  border-top-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(17, 169, 214, 0.18), 0 10px 22px rgba(7, 59, 114, 0.12);
+}
 .demand-dashboard strong { color: var(--navy); font-size: 25px; }
+.demand-drilldown-panel {
+  display: grid;
+  gap: 12px;
+  margin: -4px 0 18px;
+  padding: 16px;
+  border: 1px solid rgba(0, 94, 184, 0.14);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f7fbff);
+  box-shadow: var(--shadow-sm);
+}
+.demand-drilldown-panel[hidden] { display: none; }
+.demand-drilldown-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.demand-drilldown-heading h3 { margin: 3px 0 5px; color: var(--navy); }
+.demand-drilldown-heading p { margin: 0; font-size: 12px; }
+.demand-drilldown-list { display: grid; gap: 8px; }
+.demand-drilldown-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+.demand-drilldown-item strong,
+.demand-drilldown-item small { display: block; }
+.demand-drilldown-item small { margin-top: 4px; color: var(--muted); }
+.demand-drilldown-item span {
+  justify-self: end;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e5f3fc;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
 .financial-evolution {
   display: grid;
   gap: 16px;
@@ -1894,7 +1949,8 @@ tbody tr:hover { background: #f3f8fc; }
   .inline-actions { flex-wrap: wrap; }
   .form-grid, .metrics-grid, .split, .charts-grid, .variable-panel, .variable-row, .diagnostic-grid, .review-summary, .foundation-evidence-grid, .ts-projection-grid, .variable-catalog-grid, .attachment-gallery, .search-engine-grid, .search-engine-notice, .url-capture-panel, .url-capture-preview, .demand-dashboard, .financial-summary, .demand-register-grid, .demand-register-grid .form-grid { grid-template-columns: 1fr; }
   .financial-evolution-heading { flex-direction: column; }
-  .evaluation-demand-controls, .evaluation-demand-match { grid-template-columns: 1fr; }
+  .evaluation-demand-controls, .evaluation-demand-match, .demand-drilldown-heading, .demand-drilldown-item { grid-template-columns: 1fr; }
+  .demand-drilldown-item span { justify-self: start; }
   .url-capture-preview .span-2 { grid-column: span 1; }
   .review-header { flex-direction: column; }
   .review-item { grid-template-columns: 26px minmax(0, 1fr); }

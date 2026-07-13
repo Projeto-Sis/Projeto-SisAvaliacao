@@ -106,12 +106,23 @@
             <span class="pill">Módulo gerencial</span>
           </div>
           <div id="demandDashboard" class="demand-dashboard" aria-live="polite">
-            <article><small>Total de demandas</small><strong data-demand-metric="total_demands">0</strong></article>
-            <article><small>Fora do prazo</small><strong data-demand-metric="overdue">0</strong></article>
-            <article><small>ART pendente</small><strong data-demand-metric="pending_art">0</strong></article>
-            <article><small>Pagamento pendente</small><strong data-demand-metric="pending_payment">0</strong></article>
-            <article><small>Valor dos serviços</small><strong data-demand-money="total_service_value">R$ 0,00</strong></article>
-            <article><small>Honorários de parceiros</small><strong data-demand-money="total_partner_fees">R$ 0,00</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="total"><small>Total de demandas</small><strong data-demand-metric="total_demands">0</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="overdue"><small>Fora do prazo</small><strong data-demand-metric="overdue">0</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="pending_art"><small>ART pendente</small><strong data-demand-metric="pending_art">0</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="pending_payment"><small>Pagamento pendente</small><strong data-demand-metric="pending_payment">0</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="service_value"><small>Valor dos serviços</small><strong data-demand-money="total_service_value">R$ 0,00</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="partner_fees"><small>Honorários de parceiros</small><strong data-demand-money="total_partner_fees">R$ 0,00</strong></article>
+          </div>
+          <div id="demandDrilldownPanel" class="demand-drilldown-panel" hidden>
+            <div class="demand-drilldown-heading">
+              <div>
+                <span class="financial-kicker">Extrato do indicador</span>
+                <h3 id="demandDrilldownTitle">Resumo</h3>
+                <p id="demandDrilldownSummary">Selecione um quadro para ver a composição.</p>
+              </div>
+              <button id="closeDemandDrilldownBtn" class="ghost-button" type="button">Fechar</button>
+            </div>
+            <div id="demandDrilldownList" class="demand-drilldown-list"></div>
           </div>
           <div class="demand-register-grid">
             <details class="demand-create-panel">

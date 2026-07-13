@@ -27,6 +27,11 @@
   const searchEvaluationDemandButton = document.querySelector("#searchEvaluationDemandBtn");
   const evaluationDemandMatches = document.querySelector("#evaluationDemandMatches");
   const evaluationDemandMessage = document.querySelector("#evaluationDemandMessage");
+  const demandDrilldownPanel = document.querySelector("#demandDrilldownPanel");
+  const demandDrilldownTitle = document.querySelector("#demandDrilldownTitle");
+  const demandDrilldownSummary = document.querySelector("#demandDrilldownSummary");
+  const demandDrilldownList = document.querySelector("#demandDrilldownList");
+  const closeDemandDrilldownButton = document.querySelector("#closeDemandDrilldownBtn");
   let demands = [];
   let financialItems = [];
   let evaluationSearchResults = [];
@@ -79,6 +84,93 @@
         <td class="${["Não realizado", "Parcial"].includes(item.payment_status) ? "demand-payment-pending" : ""}">${escapeHtml(item.payment_status)}</td>
         <td><div class="inline-actions"><button type="button" class="table-action" data-edit-demand="${item.id}">Editar</button><button type="button" class="table-action" data-create-evaluation="${item.id}">${item.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button></div></td>
       </tr>`).join("");
+  }
+
+  function demandLabel(item) {
+    return `${item.bank_name || "Banco não informado"} · OS ${item.os_number || "sem OS"}`;
+  }
+
+  function demandSubLabel(item) {
+    const parts = [
+      [item.city, item.state_code].filter(Boolean).join("/"),
+      item.proponent_name ? `Proponente: ${item.proponent_name}` : "",
+      item.client_deadline ? `Prazo: ${item.client_deadline}` : "",
+      item.deadline_status || "",
+      item.demand_status || "",
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }
+
+  function drilldownConfig(type) {
+    const configs = {
+      total: {
+        title: "Total de demandas",
+        description: "Todas as demandas cadastradas no Controle de Demanda.",
+        filter: () => true,
+        value: (items) => `${items.length.toLocaleString("pt-BR")} demanda(s)`,
+      },
+      overdue: {
+        title: "Demandas fora do prazo",
+        description: "Demandas cujo prazo calculado já foi atingido ou ultrapassado e ainda não estão finalizadas.",
+        filter: (item) => item.deadline_status === "Fora do prazo",
+        value: (items) => `${items.length.toLocaleString("pt-BR")} demanda(s) fora do prazo`,
+      },
+      pending_art: {
+        title: "ART pendente",
+        description: "Demandas com status de ART marcado como pendente.",
+        filter: (item) => item.art_status === "Pendente",
+        value: (items) => `${items.length.toLocaleString("pt-BR")} ART(s) pendente(s)`,
+      },
+      pending_payment: {
+        title: "Pagamento pendente",
+        description: "Demandas com pagamento não realizado ou parcial.",
+        filter: (item) => ["Não realizado", "Parcial"].includes(item.payment_status),
+        value: (items) => `${items.length.toLocaleString("pt-BR")} pagamento(s) pendente(s)`,
+      },
+      service_value: {
+        title: "Valor dos serviços",
+        description: "Composição do valor bruto dos serviços cadastrados.",
+        filter: (item) => Number(item.service_value || 0) > 0,
+        value: (items) => money(items.reduce((total, item) => total + Number(item.service_value || 0), 0)),
+        lineValue: (item) => money(item.service_value),
+      },
+      partner_fees: {
+        title: "Honorários de parceiros",
+        description: "Composição dos honorários de parceiros vinculados às demandas.",
+        filter: (item) => Number(item.partner_fee || 0) > 0,
+        value: (items) => money(items.reduce((total, item) => total + Number(item.partner_fee || 0), 0)),
+        lineValue: (item) => money(item.partner_fee),
+      },
+    };
+    return configs[type] || configs.total;
+  }
+
+  function renderDemandDrilldown(type) {
+    const config = drilldownConfig(type);
+    const source = Array.isArray(demands) ? demands : [];
+    const items = source.filter(config.filter);
+    demandDrilldownTitle.textContent = config.title;
+    demandDrilldownSummary.textContent = `${config.description} Total do extrato: ${config.value(items)}.`;
+
+    if (!source.length) {
+      demandDrilldownList.innerHTML = '<div class="registry-empty">A lista detalhada ainda não foi carregada. Recarregue após o deploy estabilizar ou cadastre a primeira demanda.</div>';
+    } else if (!items.length) {
+      demandDrilldownList.innerHTML = '<div class="registry-empty">Nenhum registro encontrado para este indicador.</div>';
+    } else {
+      demandDrilldownList.innerHTML = items.map((item) => `
+        <div class="demand-drilldown-item">
+          <div>
+            <strong>${escapeHtml(demandLabel(item))}</strong>
+            <small>${escapeHtml(demandSubLabel(item))}</small>
+          </div>
+          <span>${escapeHtml(config.lineValue ? config.lineValue(item) : item.payment_status || item.art_status || item.deadline_status || item.demand_status || "Detalhe")}</span>
+        </div>`).join("");
+    }
+    panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => {
+      card.classList.toggle("active", card.dataset.demandDrilldown === type);
+    });
+    demandDrilldownPanel.hidden = false;
+    demandDrilldownPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function renderPartners(items) {
@@ -465,6 +557,19 @@
   });
 
   document.querySelector("#refreshDemandsBtn").addEventListener("click", loadModule);
+  panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => {
+    card.addEventListener("click", () => renderDemandDrilldown(card.dataset.demandDrilldown));
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        renderDemandDrilldown(card.dataset.demandDrilldown);
+      }
+    });
+  });
+  closeDemandDrilldownButton.addEventListener("click", () => {
+    demandDrilldownPanel.hidden = true;
+    panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => card.classList.remove("active"));
+  });
   cancelEditButton.addEventListener("click", () => {
     finishEditing();
     message.textContent = "Edição cancelada.";
