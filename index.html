@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISAVALIA</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260710-delete-photo" />
+    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa3-pagamento" />
   </head>
   <body class="auth-locked">
     <section id="loginGate" class="login-gate" aria-labelledby="loginTitle">
@@ -105,6 +105,15 @@
             </div>
             <span class="pill">Módulo gerencial</span>
           </div>
+          <div id="demandBackendStatus" class="backend-status-card warn" role="status" aria-live="polite">
+            <span class="backend-status-dot" aria-hidden="true"></span>
+            <div>
+              <strong id="demandBackendStatusTitle">Verificando Controle de Demanda</strong>
+              <p id="demandBackendStatusText">Validando comunicação com o backend e com o banco de dados.</p>
+              <small id="demandBackendStatusHint">Aguarde alguns segundos antes de cadastrar ou pesquisar OS.</small>
+            </div>
+            <button id="retryDemandBackendBtn" class="secondary-button" type="button">Testar conexão</button>
+          </div>
           <div id="demandDashboard" class="demand-dashboard" aria-live="polite">
             <article role="button" tabindex="0" data-demand-drilldown="total"><small>Total de demandas</small><strong data-demand-metric="total_demands">0</strong></article>
             <article role="button" tabindex="0" data-demand-drilldown="overdue"><small>Fora do prazo</small><strong data-demand-metric="overdue">0</strong></article>
@@ -185,6 +194,11 @@
               <label>Cidade<input id="demandCity" required /></label>
               <label>UF<input id="demandState" maxlength="2" required /></label>
               <label>Status da demanda<select id="demandStatus"><option>Recebida</option><option>Em análise</option><option>Agendada</option><option>Vistoria realizada</option><option>Em elaboração</option><option>Enviada ao engenheiro</option><option>Finalizada</option><option>Entregue</option><option>Cancelada</option><option>Não entregue</option></select></label>
+              <label>Status do parceiro<select id="demandPartnerStatus"><option>Não definido</option><option>Acionado</option><option>Entregue</option><option>Não entregue</option><option>Cancelado</option></select></label>
+              <label>Status no sistema/banco<select id="demandSystemStatus"><option>Não iniciado</option><option>Emitida</option><option>Concluída</option><option>Pendente</option><option>Cancelada</option></select></label>
+              <label>Pagamento ao parceiro<select id="demandPaymentStatus"><option>Não realizado</option><option>Pagamento realizado</option><option>Parcial</option><option>Cancelado</option><option>Não se aplica</option></select></label>
+              <label>Entregue ao engenheiro<input id="demandDeliveredToEngineer" type="date" /></label>
+              <label>Finalizada no sistema<input id="demandSystemFinished" type="date" /></label>
               <label class="span-3">Observações<textarea id="demandNotes" rows="3"></textarea></label>
               <div class="inline-actions span-3">
                 <button id="saveDemandBtn" class="primary-button" type="submit">Cadastrar demanda</button>
@@ -195,7 +209,64 @@
           </details>
           <div class="section-heading demand-list-heading">
             <h3>Demandas cadastradas</h3>
-            <button id="refreshDemandsBtn" class="secondary-button" type="button">Atualizar</button>
+            <div class="inline-actions">
+              <button id="refreshDemandsBtn" class="secondary-button" type="button">Atualizar</button>
+              <button id="resetDemandsBtn" class="danger-button" type="button">Limpar demandas</button>
+            </div>
+          </div>
+          <div class="demand-filter-panel" aria-label="Filtros das demandas cadastradas">
+            <label class="span-2">Pesquisar na lista
+              <input id="demandListSearch" placeholder="OS, 4 últimos números, CPF, proponente, cidade ou UF" />
+            </label>
+            <label>Banco
+              <select id="demandFilterBank"><option value="">Todos os bancos</option></select>
+            </label>
+            <label>Situação
+              <select id="demandFilterStatus">
+                <option value="">Todas</option>
+                <option>Recebida</option>
+                <option>Em análise</option>
+                <option>Agendada</option>
+                <option>Vistoria realizada</option>
+                <option>Em elaboração</option>
+                <option>Finalizada</option>
+                <option>Entregue</option>
+                <option>Cancelada</option>
+                <option>Não entregue</option>
+              </select>
+            </label>
+            <label>Prazo
+              <select id="demandFilterDeadline">
+                <option value="">Todos</option>
+                <option>Dentro do prazo</option>
+                <option>Fora do prazo</option>
+              </select>
+            </label>
+            <label>Pagamento
+              <select id="demandFilterPayment">
+                <option value="">Todos</option>
+                <option>Não realizado</option>
+                <option>Pagamento realizado</option>
+                <option>Parcial</option>
+                <option>Cancelado</option>
+                <option>Não se aplica</option>
+              </select>
+            </label>
+            <div class="demand-filter-actions">
+              <button id="clearDemandFiltersBtn" class="ghost-button" type="button">Limpar filtros</button>
+              <span id="demandFilterSummary" class="project-status">Nenhuma demanda carregada.</span>
+            </div>
+          </div>
+          <div id="demandDetailPanel" class="demand-detail-panel" hidden>
+            <div class="demand-drilldown-heading">
+              <div>
+                <span class="financial-kicker">Resumo da OS</span>
+                <h3 id="demandDetailTitle">Demanda</h3>
+                <p id="demandDetailSummary">Dados principais da ordem de serviço selecionada.</p>
+              </div>
+              <button id="closeDemandDetailBtn" class="ghost-button" type="button">Fechar</button>
+            </div>
+            <div id="demandDetailBody" class="demand-detail-body"></div>
           </div>
           <div class="table-wrap">
             <table class="demand-table">
@@ -729,6 +800,6 @@
     </div>
     <script src="src/app.js?v=20260710-delete-photo"></script>
     <script src="src/search-engine.js?v=20260702-2010"></script>
-    <script src="src/demand-control.js?v=20260703-5"></script>
+    <script src="src/demand-control.js?v=20260720-etapa3-pagamento"></script>
   </body>
 </html>

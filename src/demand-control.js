@@ -27,16 +27,37 @@
   const searchEvaluationDemandButton = document.querySelector("#searchEvaluationDemandBtn");
   const evaluationDemandMatches = document.querySelector("#evaluationDemandMatches");
   const evaluationDemandMessage = document.querySelector("#evaluationDemandMessage");
+  const resetDemandsButton = document.querySelector("#resetDemandsBtn");
   const demandDrilldownPanel = document.querySelector("#demandDrilldownPanel");
   const demandDrilldownTitle = document.querySelector("#demandDrilldownTitle");
   const demandDrilldownSummary = document.querySelector("#demandDrilldownSummary");
   const demandDrilldownList = document.querySelector("#demandDrilldownList");
   const closeDemandDrilldownButton = document.querySelector("#closeDemandDrilldownBtn");
+  const backendStatusCard = document.querySelector("#demandBackendStatus");
+  const backendStatusTitle = document.querySelector("#demandBackendStatusTitle");
+  const backendStatusText = document.querySelector("#demandBackendStatusText");
+  const backendStatusHint = document.querySelector("#demandBackendStatusHint");
+  const retryDemandBackendButton = document.querySelector("#retryDemandBackendBtn");
+  const demandListSearch = document.querySelector("#demandListSearch");
+  const demandFilterBank = document.querySelector("#demandFilterBank");
+  const demandFilterStatus = document.querySelector("#demandFilterStatus");
+  const demandFilterDeadline = document.querySelector("#demandFilterDeadline");
+  const demandFilterPayment = document.querySelector("#demandFilterPayment");
+  const clearDemandFiltersButton = document.querySelector("#clearDemandFiltersBtn");
+  const demandFilterSummary = document.querySelector("#demandFilterSummary");
+  const demandDetailPanel = document.querySelector("#demandDetailPanel");
+  const demandDetailTitle = document.querySelector("#demandDetailTitle");
+  const demandDetailSummary = document.querySelector("#demandDetailSummary");
+  const demandDetailBody = document.querySelector("#demandDetailBody");
+  const closeDemandDetailButton = document.querySelector("#closeDemandDetailBtn");
   let demands = [];
+  let visibleDemands = [];
   let financialItems = [];
   let evaluationSearchResults = [];
   let dashboardSummary = {};
   let editingDemandId = null;
+  let backendOnline = false;
+  const PAYMENT_STATUS_OPTIONS = ["Não realizado", "Pagamento realizado", "Parcial", "Cancelado", "Não se aplica"];
 
   function escapeHtml(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -44,6 +65,59 @@
 
   function money(value) {
     return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+
+  function normalize(value) {
+    return String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  function isLocalHost() {
+    return ["127.0.0.1", "localhost"].includes(window.location.hostname);
+  }
+
+  function backendTargetLabel() {
+    return API_BASE_URL || window.location.origin;
+  }
+
+  function backendHelpMessage(error) {
+    const detail = error?.message ? `Detalhe técnico: ${error.message}` : "";
+    if (isLocalHost()) {
+      return {
+        title: "Backend local indisponível",
+        text: `O SISAVALIA abriu a interface, mas a API não respondeu em ${backendTargetLabel()}.`,
+        hint: `${detail} Inicie o backend no Terminal e clique em “Testar conexão”.`,
+      };
+    }
+    return {
+      title: "API do Render indisponível ou incompleta",
+      text: "A página abriu, mas o Controle de Demanda não conseguiu conversar corretamente com o backend publicado.",
+      hint: `${detail} Verifique o deploy no Render, a variável SISAVALIA_DATABASE_URL e se as migrações do PostgreSQL foram executadas.`,
+    };
+  }
+
+  function setBackendStatus(state, title, text, hint = "") {
+    if (!backendStatusCard) return;
+    backendStatusCard.classList.remove("ok", "warn", "fail");
+    backendStatusCard.classList.add(state);
+    if (backendStatusTitle) backendStatusTitle.textContent = title;
+    if (backendStatusText) backendStatusText.textContent = text;
+    if (backendStatusHint) backendStatusHint.textContent = hint;
+  }
+
+  function setBackendDependentState(isOnline) {
+    backendOnline = Boolean(isOnline);
+    panel.classList.toggle("is-backend-offline", !backendOnline);
+    [saveButton, resetDemandsButton, searchEvaluationDemandButton].filter(Boolean).forEach((button) => {
+      button.disabled = !backendOnline;
+    });
+    [partnerForm, engineerForm].filter(Boolean).forEach((targetForm) => {
+      const submit = targetForm.querySelector('button[type="submit"]');
+      if (submit) submit.disabled = !backendOnline;
+    });
   }
 
   async function request(path, options = {}) {
@@ -58,6 +132,17 @@
       `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")}`;
   }
 
+  function populateDemandFilterBanks(items) {
+    if (!demandFilterBank) return;
+    demandFilterBank.innerHTML = options(items, "Todos os bancos");
+  }
+
+  function statusOptions(values, selected) {
+    return values.map((status) =>
+      `<option value="${escapeHtml(status)}" ${status === selected ? "selected" : ""}>${escapeHtml(status)}</option>`
+    ).join("");
+  }
+
   function renderDashboard(data) {
     dashboardSummary = data || {};
     panel.querySelectorAll("[data-demand-metric]").forEach((element) => {
@@ -68,10 +153,58 @@
     });
   }
 
-  function renderDemands(items) {
-    demands = items;
+  function demandSearchText(item) {
+    return normalize([
+      item.os_number,
+      String(item.os_number || "").slice(-4),
+      item.final_os_number,
+      item.proponent_cpf,
+      item.proponent_name,
+      item.bank_name,
+      item.city,
+      item.state_code,
+      item.engineer_name,
+      item.partner_name,
+      item.demand_status,
+      item.payment_status,
+    ].filter(Boolean).join(" "));
+  }
+
+  function demandMatchesFilters(item) {
+    const search = normalize(demandListSearch?.value || "");
+    const bank = demandFilterBank?.value || "";
+    const status = demandFilterStatus?.value || "";
+    const deadline = demandFilterDeadline?.value || "";
+    const payment = demandFilterPayment?.value || "";
+    if (search && !demandSearchText(item).includes(search)) return false;
+    if (bank && item.client_bank_id !== bank) return false;
+    if (status && item.demand_status !== status) return false;
+    if (deadline && item.deadline_status !== deadline) return false;
+    if (payment && item.payment_status !== payment) return false;
+    return true;
+  }
+
+  function updateDemandFilterSummary(total, shown) {
+    if (!demandFilterSummary) return;
+    const totalText = `${shown.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} demanda(s) exibida(s).`;
+    const hasFilter = Boolean(
+      (demandListSearch?.value || "").trim()
+      || demandFilterBank?.value
+      || demandFilterStatus?.value
+      || demandFilterDeadline?.value
+      || demandFilterPayment?.value
+    );
+    demandFilterSummary.textContent = hasFilter ? `${totalText} Filtro ativo.` : totalText;
+    demandFilterSummary.className = hasFilter ? "project-status warn" : "project-status";
+  }
+
+  function renderDemandRows(items) {
+    visibleDemands = items;
     if (!items.length) {
-      tableBody.innerHTML = '<tr><td colspan="9">Nenhuma demanda cadastrada.</td></tr>';
+      tableBody.innerHTML = demands.length
+        ? '<tr><td colspan="9">Nenhuma demanda encontrada com os filtros aplicados.</td></tr>'
+        : '<tr><td colspan="9">Nenhuma demanda cadastrada.</td></tr>';
+      updateDemandFilterSummary(demands.length, 0);
       return;
     }
     tableBody.innerHTML = items.map((item) => `
@@ -83,9 +216,52 @@
         <td>${escapeHtml(item.engineer_name || "Não definido")}</td>
         <td>${escapeHtml(item.partner_name || "Não definido")}</td>
         <td>${escapeHtml(item.demand_status)}</td>
-        <td class="${["Não realizado", "Parcial"].includes(item.payment_status) ? "demand-payment-pending" : ""}">${escapeHtml(item.payment_status)}</td>
-        <td><div class="inline-actions"><button type="button" class="table-action" data-edit-demand="${item.id}">Editar</button><button type="button" class="table-action" data-create-evaluation="${item.id}">${item.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button></div></td>
+        <td class="${["Não realizado", "Parcial"].includes(item.payment_status) ? "demand-payment-pending" : ""}">
+          <select class="table-status-select" data-update-payment="${item.id}" aria-label="Atualizar pagamento ao parceiro da OS ${escapeHtml(item.os_number)}">
+            ${statusOptions(PAYMENT_STATUS_OPTIONS, item.payment_status)}
+          </select>
+        </td>
+        <td><div class="inline-actions"><button type="button" class="table-action" data-view-demand="${item.id}">Ver resumo</button><button type="button" class="table-action" data-edit-demand="${item.id}">Editar</button><button type="button" class="table-action" data-create-evaluation="${item.id}">${item.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button></div></td>
       </tr>`).join("");
+    updateDemandFilterSummary(demands.length, items.length);
+  }
+
+  function applyDemandListFilters() {
+    renderDemandRows(demands.filter(demandMatchesFilters));
+  }
+
+  function renderDemands(items) {
+    demands = Array.isArray(items) ? items : [];
+    applyDemandListFilters();
+  }
+
+  function demandPayloadFromItem(item, overrides = {}) {
+    return {
+      client_bank_id: item.client_bank_id,
+      os_number: item.os_number,
+      final_os_number: item.final_os_number || null,
+      proponent_name: item.proponent_name || null,
+      proponent_cpf: item.proponent_cpf || null,
+      arrival_date: item.arrival_date,
+      client_deadline: item.client_deadline || null,
+      deadline_days: Number(item.deadline_days) || 7,
+      service_value: item.service_value != null ? Number(item.service_value) : null,
+      engineer_id: item.engineer_id || null,
+      art_status: item.art_status || "Pendente",
+      partner_id: item.partner_id || null,
+      partner_fee: item.partner_fee != null ? Number(item.partner_fee) : null,
+      city: item.city,
+      state_code: item.state_code,
+      demand_status: item.demand_status || "Recebida",
+      partner_status: item.partner_status || "Não definido",
+      system_status: item.system_status || "Não iniciado",
+      payment_status: item.payment_status || "Não realizado",
+      delivered_to_engineer_at: item.delivered_to_engineer_at || null,
+      system_finished_at: item.system_finished_at || null,
+      evaluation_id: item.evaluation_id || null,
+      notes: item.notes || null,
+      ...overrides,
+    };
   }
 
   function demandLabel(item) {
@@ -101,6 +277,44 @@
       item.demand_status || "",
     ].filter(Boolean);
     return parts.join(" · ");
+  }
+
+  function detailField(label, value) {
+    return `<div class="demand-detail-field"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value || "Não informado")}</strong></div>`;
+  }
+
+  function renderDemandDetail(demand) {
+    if (!demand || !demandDetailPanel) return;
+    demandDetailTitle.textContent = `${demand.bank_name || "Banco não informado"} · OS ${demand.os_number || "sem número"}`;
+    demandDetailSummary.textContent = demandSubLabel(demand) || "Dados principais da demanda selecionada.";
+    demandDetailBody.innerHTML = `
+      ${detailField("Banco / cliente", demand.bank_name)}
+      ${detailField("Número da OS", demand.os_number)}
+      ${detailField("Número final da OS", demand.final_os_number)}
+      ${detailField("Proponente", demand.proponent_name)}
+      ${detailField("CPF do proponente", demand.proponent_cpf)}
+      ${detailField("Cidade / UF", [demand.city, demand.state_code].filter(Boolean).join("/"))}
+      ${detailField("Engenheiro", demand.engineer_name)}
+      ${detailField("Parceiro", demand.partner_name)}
+      ${detailField("Prazo definido", demand.client_deadline)}
+      ${detailField("Status do prazo", demand.deadline_status)}
+      ${detailField("Situação", demand.demand_status)}
+      ${detailField("Status do parceiro", demand.partner_status)}
+      ${detailField("Status no sistema/banco", demand.system_status)}
+      ${detailField("ART", demand.art_status)}
+      ${detailField("Pagamento ao parceiro", demand.payment_status)}
+      ${detailField("Entregue ao engenheiro", demand.delivered_to_engineer_at)}
+      ${detailField("Finalizada no sistema", demand.system_finished_at)}
+      ${detailField("Valor do serviço", money(demand.service_value))}
+      ${detailField("Honorário do parceiro", money(demand.partner_fee))}
+      <div class="demand-detail-field span-3"><small>Observações</small><strong>${escapeHtml(demand.notes || "Sem observações")}</strong></div>
+      <div class="inline-actions span-3">
+        <button type="button" class="secondary-button" data-detail-edit="${demand.id}">Editar cadastro</button>
+        <button type="button" class="primary-button" data-detail-create-evaluation="${demand.id}">${demand.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button>
+      </div>
+    `;
+    demandDetailPanel.hidden = false;
+    demandDetailPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function drilldownConfig(type) {
@@ -315,7 +529,63 @@
     if (window.SISAVALIA?.updateAll) window.SISAVALIA.updateAll();
   }
 
+  function openDemandInEvaluation(demand, preserveExisting = true) {
+    if (!demand) return;
+    const mappings = {
+      osNumber: demand.os_number,
+      osDate: demand.arrival_date,
+      proponent: demand.proponent_name,
+      cpfCnpj: demand.proponent_cpf,
+      city: demand.city,
+      state: demand.state_code,
+    };
+    Object.entries(mappings).forEach(([id, fieldValue]) => {
+      const field = document.querySelector(`#${id}`);
+      if (field && (!preserveExisting || !field.value)) field.value = fieldValue || "";
+    });
+    const projectName = document.querySelector("#projectName");
+    if (projectName && (!preserveExisting || !projectName.value.trim())) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
+    sessionStorage.setItem("sisavalia.activeDemandId", demand.id);
+    location.hash = "os";
+  }
+
+  async function quickUpdateDemand(demandId, overrides, control) {
+    const demand = demands.find((item) => item.id === demandId);
+    if (!demand) return;
+    if (!backendOnline) {
+      message.textContent = "Controle de Demanda offline. Clique em “Testar conexão” antes de atualizar.";
+      message.className = "project-status fail";
+      if (control && "value" in control) control.value = demand.payment_status || "Não realizado";
+      return;
+    }
+    const payload = demandPayloadFromItem(demand, overrides);
+    if (control) control.disabled = true;
+    message.textContent = "Atualizando demanda...";
+    message.className = "project-status warn";
+    try {
+      await request(`/demands/${demand.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-SISAVALIA-User": "Admin" },
+        body: JSON.stringify(payload),
+      });
+      message.textContent = "Demanda atualizada com sucesso.";
+      message.className = "project-status ok";
+      await loadModule();
+    } catch (error) {
+      message.textContent = `${error.message} Não foi possível atualizar a demanda.`;
+      message.className = "project-status fail";
+      if (control && "value" in control) control.value = demand.payment_status || "Não realizado";
+    } finally {
+      if (control) control.disabled = false;
+    }
+  }
+
   async function searchDemandsForEvaluation() {
+    if (!backendOnline) {
+      evaluationDemandMessage.textContent = "Controle de Demanda offline. Clique em “Testar conexão” no módulo gerencial e tente novamente.";
+      evaluationDemandMessage.className = "project-status fail";
+      return;
+    }
     const search = evaluationDemandSearch.value.trim();
     if (search.length < 2) {
       evaluationDemandMessage.textContent = "Digite ao menos dois caracteres para pesquisar.";
@@ -337,11 +607,63 @@
     }
   }
 
+  async function resetDemands() {
+    if (!backendOnline) {
+      message.textContent = "Controle de Demanda offline. Teste a conexão antes de limpar demandas.";
+      message.className = "project-status fail";
+      return;
+    }
+    const confirmation = window.prompt("Esta ação apagará as demandas e pagamentos de OS vinculados. Para confirmar, digite LIMPAR:");
+    if (confirmation !== "LIMPAR") {
+      message.textContent = "Limpeza cancelada. Nenhuma demanda foi apagada.";
+      message.className = "project-status warn";
+      return;
+    }
+    resetDemandsButton.disabled = true;
+    message.textContent = "Limpando demandas cadastradas...";
+    message.className = "project-status warn";
+    try {
+      const result = await request("/demands/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-SISAVALIA-User": "Admin" },
+        body: JSON.stringify({ confirmation }),
+      });
+      demands = [];
+      evaluationSearchResults = [];
+      if (evaluationDemandMatches) evaluationDemandMatches.hidden = true;
+      if (demandDrilldownPanel) demandDrilldownPanel.hidden = true;
+      panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => card.classList.remove("active"));
+      message.textContent = `Controle de Demanda limpo: ${Number(result.deleted_demands || 0).toLocaleString("pt-BR")} demanda(s) e ${Number(result.deleted_payments || 0).toLocaleString("pt-BR")} pagamento(s) vinculados removidos.`;
+      message.className = "project-status ok";
+      finishEditing();
+      await loadModule();
+    } catch (error) {
+      message.textContent = `${error.message} Não foi possível limpar as demandas.`;
+      message.className = "project-status fail";
+    } finally {
+      resetDemandsButton.disabled = false;
+    }
+  }
+
   async function loadModule() {
+    setBackendDependentState(false);
+    setBackendStatus(
+      "warn",
+      "Verificando Controle de Demanda",
+      "Testando acesso ao backend e ao PostgreSQL.",
+      `Destino da API: ${backendTargetLabel()}`
+    );
     try {
       const banks = await request("/client-banks");
       bankSelect.innerHTML = options(banks.items);
-      saveButton.disabled = false;
+      populateDemandFilterBanks(banks.items);
+      setBackendDependentState(true);
+      setBackendStatus(
+        "ok",
+        "Controle de Demanda conectado",
+        "Backend e lista de bancos responderam corretamente.",
+        `Destino da API: ${backendTargetLabel()}`
+      );
 
       const [engineers, partners, dashboard, demandList] = await Promise.allSettled([
         request("/engineers"), request("/partners"), request("/dashboard"), request("/demands"),
@@ -388,13 +710,30 @@
         ? "Bancos carregados. Algumas áreas auxiliares ainda não responderam; recarregue após o deploy estabilizar."
         : "Controle de Demanda conectado.";
       message.className = partialFailures ? "project-status warn" : "project-status ok";
+      if (partialFailures) {
+        setBackendStatus(
+          "warn",
+          "Controle de Demanda parcialmente carregado",
+          "A API respondeu, mas uma ou mais listas auxiliares falharam.",
+          "Você pode cadastrar se os bancos estiverem carregados; se algo não aparecer, clique em Testar conexão após alguns segundos."
+        );
+      }
     } catch (error) {
       bankSelect.innerHTML = '<option value="">Backend indisponível — reinicie para carregar bancos</option>';
       engineerSelect.innerHTML = '<option value="">Backend indisponível</option>';
       partnerSelect.innerHTML = '<option value="">Backend indisponível</option>';
+      populateDemandFilterBanks([]);
       tableBody.innerHTML = '<tr><td colspan="9">Não foi possível carregar as demandas. Reinicie o backend e recarregue a página.</td></tr>';
-      saveButton.disabled = true;
-      message.textContent = `${error.message} Reinicie o backend e recarregue o SISAVALIA.`;
+      renderDashboard({});
+      demands = [];
+      visibleDemands = [];
+      updateDemandFilterSummary(0, 0);
+      if (demandDrilldownPanel) demandDrilldownPanel.hidden = true;
+      if (demandDetailPanel) demandDetailPanel.hidden = true;
+      const help = backendHelpMessage(error);
+      setBackendDependentState(false);
+      setBackendStatus("fail", help.title, help.text, help.hint);
+      message.textContent = `${help.text} ${help.hint}`;
       message.className = "project-status fail";
     }
   }
@@ -417,8 +756,38 @@
     cancelEditButton.hidden = true;
   }
 
+  function startEditingDemand(demand) {
+    if (!demand) return;
+    editingDemandId = demand.id;
+    const mappings = {
+      demandBank: demand.client_bank_id, demandOsNumber: demand.os_number,
+      demandFinalOsNumber: demand.final_os_number, demandProponentName: demand.proponent_name,
+      demandProponentCpf: demand.proponent_cpf, demandArrivalDate: demand.arrival_date,
+      demandDeadlineDays: demand.deadline_days, demandDeadline: demand.client_deadline,
+      demandServiceValue: demand.service_value, demandEngineer: demand.engineer_id,
+      demandArtStatus: demand.art_status, demandPartner: demand.partner_id,
+      demandPartnerFee: demand.partner_fee, demandCity: demand.city,
+      demandState: demand.state_code, demandStatus: demand.demand_status,
+      demandPartnerStatus: demand.partner_status, demandSystemStatus: demand.system_status,
+      demandPaymentStatus: demand.payment_status, demandDeliveredToEngineer: demand.delivered_to_engineer_at,
+      demandSystemFinished: demand.system_finished_at, demandNotes: demand.notes,
+    };
+    Object.entries(mappings).forEach(([id, fieldValue]) => setValue(id, fieldValue));
+    saveButton.textContent = "Salvar alterações";
+    cancelEditButton.hidden = false;
+    form.closest("details").open = true;
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    message.textContent = `Editando a OS ${demand.os_number}.`;
+    message.className = "project-status";
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!backendOnline) {
+      message.textContent = "Controle de Demanda offline. Clique em “Testar conexão” antes de cadastrar.";
+      message.className = "project-status fail";
+      return;
+    }
     saveButton.disabled = true;
     message.textContent = editingDemandId ? "Salvando alterações..." : "Cadastrando demanda...";
     try {
@@ -440,11 +809,11 @@
         city: value("demandCity"),
         state_code: value("demandState").toUpperCase(),
         demand_status: value("demandStatus"),
-        partner_status: previous?.partner_status || "Não definido",
-        system_status: previous?.system_status || "Não iniciado",
-        payment_status: previous?.payment_status || "Não realizado",
-        delivered_to_engineer_at: previous?.delivered_to_engineer_at || null,
-        system_finished_at: previous?.system_finished_at || null,
+        partner_status: value("demandPartnerStatus") || "Não definido",
+        system_status: value("demandSystemStatus") || "Não iniciado",
+        payment_status: value("demandPaymentStatus") || "Não realizado",
+        delivered_to_engineer_at: value("demandDeliveredToEngineer") || null,
+        system_finished_at: value("demandSystemFinished") || null,
         evaluation_id: previous?.evaluation_id || null,
         notes: value("demandNotes") || null,
       };
@@ -468,6 +837,11 @@
 
   partnerForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!backendOnline) {
+      partnerMessage.textContent = "Backend offline. Teste a conexão antes de salvar parceiro.";
+      partnerMessage.className = "project-status fail";
+      return;
+    }
     const submit = partnerForm.querySelector('button[type="submit"]');
     submit.disabled = true;
     partnerMessage.textContent = "Salvando parceiro...";
@@ -502,6 +876,11 @@
 
   engineerForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!backendOnline) {
+      engineerMessage.textContent = "Backend offline. Teste a conexão antes de salvar engenheiro.";
+      engineerMessage.className = "project-status fail";
+      return;
+    }
     const submit = engineerForm.querySelector('button[type="submit"]');
     submit.disabled = true;
     engineerMessage.textContent = "Salvando engenheiro...";
@@ -529,46 +908,53 @@
   });
 
   tableBody.addEventListener("click", (event) => {
+    const viewButton = event.target.closest("[data-view-demand]");
+    if (viewButton) {
+      const demand = demands.find((item) => item.id === viewButton.dataset.viewDemand);
+      renderDemandDetail(demand);
+      return;
+    }
     const editButton = event.target.closest("[data-edit-demand]");
     if (editButton) {
       const demand = demands.find((item) => item.id === editButton.dataset.editDemand);
-      if (!demand) return;
-      editingDemandId = demand.id;
-      const mappings = {
-        demandBank: demand.client_bank_id, demandOsNumber: demand.os_number,
-        demandFinalOsNumber: demand.final_os_number, demandProponentName: demand.proponent_name,
-        demandProponentCpf: demand.proponent_cpf, demandArrivalDate: demand.arrival_date,
-        demandDeadlineDays: demand.deadline_days, demandDeadline: demand.client_deadline,
-        demandServiceValue: demand.service_value, demandEngineer: demand.engineer_id,
-        demandArtStatus: demand.art_status, demandPartner: demand.partner_id,
-        demandPartnerFee: demand.partner_fee, demandCity: demand.city,
-        demandState: demand.state_code, demandStatus: demand.demand_status, demandNotes: demand.notes,
-      };
-      Object.entries(mappings).forEach(([id, fieldValue]) => setValue(id, fieldValue));
-      saveButton.textContent = "Salvar alterações";
-      cancelEditButton.hidden = false;
-      form.closest("details").open = true;
-      form.scrollIntoView({ behavior: "smooth", block: "start" });
-      message.textContent = `Editando a OS ${demand.os_number}.`;
-      message.className = "project-status";
+      startEditingDemand(demand);
       return;
     }
     const button = event.target.closest("[data-create-evaluation]");
     if (!button) return;
     const demand = demands.find((item) => item.id === button.dataset.createEvaluation);
-    if (!demand) return;
-    const mappings = { osNumber: demand.os_number, osDate: demand.arrival_date, proponent: demand.proponent_name, cpfCnpj: demand.proponent_cpf, city: demand.city, state: demand.state_code };
-    Object.entries(mappings).forEach(([id, fieldValue]) => {
-      const field = document.querySelector(`#${id}`);
-      if (field && !field.value) field.value = fieldValue || "";
-    });
-    const projectName = document.querySelector("#projectName");
-    if (projectName && !projectName.value.trim()) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
-    sessionStorage.setItem("sisavalia.activeDemandId", demand.id);
-    location.hash = "os";
+    openDemandInEvaluation(demand, true);
+  });
+
+  tableBody.addEventListener("change", (event) => {
+    const paymentSelect = event.target.closest("[data-update-payment]");
+    if (!paymentSelect) return;
+    quickUpdateDemand(paymentSelect.dataset.updatePayment, { payment_status: paymentSelect.value }, paymentSelect);
   });
 
   document.querySelector("#refreshDemandsBtn").addEventListener("click", loadModule);
+  retryDemandBackendButton?.addEventListener("click", loadModule);
+  resetDemandsButton.addEventListener("click", resetDemands);
+  [demandListSearch, demandFilterBank, demandFilterStatus, demandFilterDeadline, demandFilterPayment].filter(Boolean).forEach((control) => {
+    control.addEventListener("input", applyDemandListFilters);
+    control.addEventListener("change", applyDemandListFilters);
+  });
+  clearDemandFiltersButton?.addEventListener("click", () => {
+    [demandListSearch, demandFilterBank, demandFilterStatus, demandFilterDeadline, demandFilterPayment].filter(Boolean).forEach((control) => { control.value = ""; });
+    applyDemandListFilters();
+  });
+  closeDemandDetailButton?.addEventListener("click", () => {
+    if (demandDetailPanel) demandDetailPanel.hidden = true;
+  });
+  demandDetailPanel?.addEventListener("click", (event) => {
+    const editButton = event.target.closest("[data-detail-edit]");
+    if (editButton) {
+      startEditingDemand(demands.find((item) => item.id === editButton.dataset.detailEdit));
+      return;
+    }
+    const createButton = event.target.closest("[data-detail-create-evaluation]");
+    if (createButton) openDemandInEvaluation(demands.find((item) => item.id === createButton.dataset.detailCreateEvaluation), true);
+  });
   panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => {
     card.addEventListener("click", () => renderDemandDrilldown(card.dataset.demandDrilldown));
     card.addEventListener("keydown", (event) => {
