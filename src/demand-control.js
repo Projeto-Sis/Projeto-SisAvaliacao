@@ -64,6 +64,7 @@
   const managementReportCards = document.querySelector("#managementReportCards");
   const reportByBank = document.querySelector("#reportByBank");
   const reportByEngineer = document.querySelector("#reportByEngineer");
+  const reportEngineerPayments = document.querySelector("#reportEngineerPayments");
   const reportByPartner = document.querySelector("#reportByPartner");
   const reportCriticalIssues = document.querySelector("#reportCriticalIssues");
   const managementReportRows = document.querySelector("#managementReportRows");
@@ -525,6 +526,48 @@
     `).join("");
   }
 
+  function engineerPaymentReport(items) {
+    const groups = new Map();
+    items.forEach((item) => {
+      if (!item.engineer_name) return;
+      const label = item.engineer_name;
+      const current = groups.get(label) || {
+        label,
+        count: 0,
+        service: 0,
+        engineerFee: 0,
+        examples: [],
+      };
+      const serviceValue = Number(item.service_value || 0);
+      current.count += 1;
+      current.service += serviceValue;
+      current.engineerFee += serviceValue * 0.10;
+      if (current.examples.length < 4 && item.os_number) current.examples.push(item.os_number);
+      groups.set(label, current);
+    });
+    return Array.from(groups.values())
+      .filter((row) => row.service > 0 || row.count > 0)
+      .sort((a, b) => b.engineerFee - a.engineerFee || b.count - a.count);
+  }
+
+  function renderEngineerPaymentReport(items) {
+    if (!reportEngineerPayments) return;
+    const rows = engineerPaymentReport(items);
+    if (!rows.length) {
+      reportEngineerPayments.innerHTML = '<div class="registry-empty">Nenhum valor de OS com engenheiro encontrado para o período filtrado.</div>';
+      return;
+    }
+    reportEngineerPayments.innerHTML = rows.map((row) => `
+      <article>
+        <div>
+          <strong>${escapeHtml(row.label)}</strong>
+          <small>${row.count.toLocaleString("pt-BR")} OS · Base: ${money(row.service)} · 10% sobre valor da OS${row.examples.length ? ` · Ex.: ${escapeHtml(row.examples.map((item) => `OS ${item}`).join(" · "))}` : ""}</small>
+        </div>
+        <span>${money(row.engineerFee)}</span>
+      </article>
+    `).join("");
+  }
+
   function renderCriticalIssues(items) {
     if (!reportCriticalIssues) return;
     const issues = [
@@ -576,6 +619,7 @@
     renderReportCards(summary);
     renderGroupedReport(reportByBank, groupedReport(items, (item) => item.bank_name), "Nenhum banco/cliente no relatório.");
     renderGroupedReport(reportByEngineer, groupedReport(items, (item) => item.engineer_name), "Nenhum engenheiro no relatório.");
+    renderEngineerPaymentReport(items);
     renderGroupedReport(reportByPartner, groupedReport(items, (item) => item.partner_name), "Nenhum parceiro no relatório.");
     renderCriticalIssues(items);
     renderReportRows(items);
