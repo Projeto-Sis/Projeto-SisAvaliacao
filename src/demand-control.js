@@ -835,9 +835,9 @@
       <div class="evaluation-demand-match">
         <div>
           <strong>${escapeHtml(item.bank_name)} · OS ${escapeHtml(item.os_number)}</strong>
-          <small>${escapeHtml(item.city)}/${escapeHtml(item.state_code)} · Recebida em ${escapeHtml(item.arrival_date)} · ${escapeHtml(item.proponent_name || "Proponente não informado")} · ${escapeHtml(item.demand_status)}</small>
+          <small>${escapeHtml(item.city)}/${escapeHtml(item.state_code)} · Recebida em ${escapeHtml(item.arrival_date)} · ${escapeHtml(item.proponent_name || "Proponente não informado")} · ${escapeHtml(item.demand_status)}${item.evaluation_id ? " · avaliação vinculada" : ""}</small>
         </div>
-        <button type="button" class="primary-button" data-use-demand="${item.id}">Usar nesta avaliação</button>
+        <button type="button" class="primary-button" data-use-demand="${item.id}">${item.evaluation_id ? "Abrir / usar OS" : "Criar avaliação"}</button>
       </div>`).join("");
   }
 
@@ -865,10 +865,11 @@
   function renderDuplicateEvaluationDecision(demand, savedProjects) {
     evaluationSearchResults = [demand];
     evaluationDemandMatches.hidden = false;
+    const hasLocalProject = savedProjects.some((project) => project.id);
     evaluationDemandMatches.innerHTML = `
       <div class="evaluation-duplicate-card">
         <span class="financial-kicker">Possível duplicidade identificada</span>
-        <h4>Já existe avaliação salva com a OS ${escapeHtml(demand.os_number)}.</h4>
+        <h4>Já existe avaliação vinculada à OS ${escapeHtml(demand.os_number)}.</h4>
         <p>Escolha uma ação antes de preencher a avaliação. O SISAVALIA não substituirá dados automaticamente.</p>
         <div class="evaluation-duplicate-actions">
           <button type="button" class="secondary-button" data-evaluation-decision="verify" data-demand-id="${demand.id}">Verificar</button>
@@ -889,11 +890,31 @@
           `).join("")}
         </div>
       </div>`;
-    evaluationDemandMessage.textContent = `Existe avaliação salva com a OS ${demand.os_number}. Escolha: verificar, substituir ou manter.`;
+    evaluationDemandMessage.textContent = hasLocalProject
+      ? `Existe avaliação salva com a OS ${demand.os_number}. Escolha: verificar, substituir ou manter.`
+      : `Existe vínculo técnico no PostgreSQL para a OS ${demand.os_number}, mas nenhum rascunho local foi encontrado neste navegador. Você pode substituir para recriar o rascunho local.`;
     evaluationDemandMessage.className = "project-status warn";
   }
 
+  function demandManagementNote(demand) {
+    const financial = demandFinancialSummary(demand);
+    return [
+      "Origem: Controle de Demanda SISAVALIA.",
+      `Banco/cliente: ${demand.bank_name || "não informado"}.`,
+      `OS: ${demand.os_number || "não informada"}.`,
+      demand.final_os_number ? `Número final da OS: ${demand.final_os_number}.` : "",
+      demand.client_deadline ? `Prazo cliente: ${formatDate(demand.client_deadline)}.` : "",
+      demand.engineer_name ? `Engenheiro: ${demand.engineer_name}.` : "",
+      demand.partner_name ? `Parceiro: ${demand.partner_name}.` : "",
+      financial.serviceValue ? `Valor da OS: ${money(financial.serviceValue)}.` : "",
+      financial.partnerFee ? `Honorário parceiro: ${money(financial.partnerFee)}.` : "",
+      financial.artValue ? `Valor ART: ${money(financial.artValue)}.` : "",
+      demand.notes ? `Observações da demanda: ${demand.notes}` : "",
+    ].filter(Boolean).join(" ");
+  }
+
   function fillDemandFields(demand, preserveExisting = false) {
+    const managementNote = demandManagementNote(demand);
     const mappings = {
       osNumber: demand.os_number,
       osDate: demand.arrival_date,
@@ -901,15 +922,33 @@
       cpfCnpj: demand.proponent_cpf,
       city: demand.city,
       state: demand.state_code,
-      propertyNotes: demand.notes,
+      propertyNotes: managementNote,
     };
     Object.entries(mappings).forEach(([id, fieldValue]) => {
       const field = document.querySelector(`#${id}`);
-      if (field && fieldValue != null && (!preserveExisting || !field.value)) field.value = fieldValue;
+      if (!field || fieldValue == null) return;
+      if (id === "propertyNotes" && preserveExisting && field.value.trim()) {
+        if (!field.value.includes("Origem: Controle de Demanda SISAVALIA.")) {
+          field.value = `${field.value.trim()}\n\n${fieldValue}`;
+        }
+        return;
+      }
+      if (!preserveExisting || !field.value) field.value = fieldValue;
     });
     const projectName = document.querySelector("#projectName");
     if (projectName && (!preserveExisting || !projectName.value.trim())) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
     sessionStorage.setItem("sisavalia.activeDemandId", demand.id);
+  }
+
+  function saveEvaluationDraftFromDemand(demand, createNewDraft = true) {
+    if (!window.SISAVALIA?.saveCurrentProject) return false;
+    if (createNewDraft && window.SISAVALIA.state) {
+      window.SISAVALIA.state.activeProjectId = null;
+      window.SISAVALIA.state.projectDirty = true;
+    }
+    window.SISAVALIA.saveCurrentProject();
+    const storedProjects = savedEvaluationsForDemand(demand);
+    return storedProjects.length > 0;
   }
 
   async function registerEvaluationLink(demand, replaceExisting = false) {
@@ -943,7 +982,10 @@
       return;
     }
     fillDemandFields(demand, Boolean(options.preserveExisting));
-    evaluationDemandMessage.textContent = `Avaliação vinculada à OS ${demand.os_number} de ${demand.bank_name}. Campos disponíveis preenchidos automaticamente.`;
+    const savedDraft = saveEvaluationDraftFromDemand(demand, options.createNewDraft !== false);
+    evaluationDemandMessage.textContent = savedDraft
+      ? `Avaliação criada/vinculada à OS ${demand.os_number} de ${demand.bank_name}. Campos preenchidos e rascunho salvo em Projetos.`
+      : `Avaliação vinculada à OS ${demand.os_number} de ${demand.bank_name}. Campos disponíveis preenchidos automaticamente.`;
     evaluationDemandMessage.className = "project-status ok";
     evaluationDemandMatches.hidden = true;
     location.hash = "os";
@@ -951,9 +993,9 @@
     if (window.SISAVALIA?.updateAll) window.SISAVALIA.updateAll();
   }
 
-  function openDemandInEvaluation(demand, preserveExisting = true) {
+  function openDemandInEvaluation(demand, preserveExisting = false) {
     if (!demand) return;
-    useDemandInEvaluation(demand, { preserveExisting });
+    useDemandInEvaluation(demand, { preserveExisting, createNewDraft: !preserveExisting });
   }
 
   async function quickUpdateDemand(demandId, overrides, control, successText = "Demanda atualizada com sucesso.") {
@@ -1374,7 +1416,7 @@
     const button = event.target.closest("[data-create-evaluation]");
     if (!button) return;
     const demand = demands.find((item) => item.id === button.dataset.createEvaluation);
-    openDemandInEvaluation(demand, true);
+    openDemandInEvaluation(demand, Boolean(demand?.evaluation_id));
   });
 
   tableBody.addEventListener("change", (event) => {
@@ -1412,7 +1454,8 @@
     }
     const createButton = event.target.closest("[data-detail-create-evaluation]");
     if (createButton) {
-      openDemandInEvaluation(demands.find((item) => item.id === createButton.dataset.detailCreateEvaluation), true);
+      const demand = demands.find((item) => item.id === createButton.dataset.detailCreateEvaluation);
+      openDemandInEvaluation(demand, Boolean(demand?.evaluation_id));
       return;
     }
     const linkButton = event.target.closest("[data-detail-link-evaluation]");
