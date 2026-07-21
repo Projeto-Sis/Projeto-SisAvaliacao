@@ -70,6 +70,15 @@
   const refreshManagementReportButton = document.querySelector("#refreshManagementReportBtn");
   const printManagementReportButton = document.querySelector("#printManagementReportBtn");
   const clearManagementReportFiltersButton = document.querySelector("#clearManagementReportFiltersBtn");
+  const productivityStartDate = document.querySelector("#productivityStartDate");
+  const productivityEndDate = document.querySelector("#productivityEndDate");
+  const productivityGroupBy = document.querySelector("#productivityGroupBy");
+  const productivitySortBy = document.querySelector("#productivitySortBy");
+  const productivitySearch = document.querySelector("#productivitySearch");
+  const clearProductivityFiltersButton = document.querySelector("#clearProductivityFiltersBtn");
+  const productivityStatus = document.querySelector("#productivityStatus");
+  const productivityCards = document.querySelector("#productivityCards");
+  const productivityRows = document.querySelector("#productivityRows");
   let demands = [];
   let visibleDemands = [];
   let financialItems = [];
@@ -306,6 +315,163 @@
     }, { total: 0, overdue: 0, pendingArt: 0, pendingPayment: 0, service: 0, partner: 0, art: 0, net: 0 });
   }
 
+  function isFinishedDemand(item) {
+    return ["Finalizada", "Entregue"].includes(item.demand_status)
+      || item.system_status === "Concluída"
+      || Boolean(item.system_finished_at);
+  }
+
+  function productivityMatchesFilters(item) {
+    const arrival = dateValue(item.arrival_date);
+    const start = dateValue(productivityStartDate?.value);
+    const end = dateValue(productivityEndDate?.value);
+    const search = normalize(productivitySearch?.value || "");
+    if (start && arrival && arrival < start) return false;
+    if (end && arrival && arrival > end) return false;
+    if (search && !demandSearchText(item).includes(search)) return false;
+    return true;
+  }
+
+  function productivityGroupLabel(item, groupBy) {
+    const groups = {
+      engineer: item.engineer_name || "Engenheiro não definido",
+      partner: item.partner_name || "Parceiro não definido",
+      bank: item.bank_name || "Banco não informado",
+      city: [item.city, item.state_code].filter(Boolean).join("/") || "Cidade não informada",
+      status: item.demand_status || "Situação não informada",
+    };
+    return groups[groupBy] || groups.engineer;
+  }
+
+  function productivityRowsFromDemands(items) {
+    const groupBy = productivityGroupBy?.value || "engineer";
+    const groups = new Map();
+    items.forEach((item) => {
+      const label = productivityGroupLabel(item, groupBy);
+      const current = groups.get(label) || {
+        label,
+        count: 0,
+        finished: 0,
+        ontime: 0,
+        overdue: 0,
+        pendingArt: 0,
+        pendingPayment: 0,
+        service: 0,
+        partner: 0,
+        art: 0,
+        net: 0,
+        days: 0,
+        daysCount: 0,
+        examples: [],
+      };
+      const financial = demandFinancialSummary(item);
+      const days = Number(item.days_execution ?? item.current_execution_days ?? 0);
+      current.count += 1;
+      current.finished += isFinishedDemand(item) ? 1 : 0;
+      current.ontime += item.deadline_status === "Dentro do prazo" ? 1 : 0;
+      current.overdue += item.deadline_status === "Fora do prazo" ? 1 : 0;
+      current.pendingArt += item.art_status === "Pendente" ? 1 : 0;
+      current.pendingPayment += ["Não realizado", "Parcial"].includes(item.payment_status) ? 1 : 0;
+      current.service += financial.serviceValue;
+      current.partner += financial.partnerFee;
+      current.art += financial.artValue;
+      current.net += financial.netValue;
+      if (Number.isFinite(days) && days >= 0) {
+        current.days += days;
+        current.daysCount += 1;
+      }
+      if (current.examples.length < 4) current.examples.push(item.os_number);
+      groups.set(label, current);
+    });
+    return Array.from(groups.values()).map((row) => ({
+      ...row,
+      completionRate: row.count ? (row.finished / row.count) * 100 : 0,
+      ontimeRate: row.count ? (row.ontime / row.count) * 100 : 0,
+      pendingTotal: row.pendingArt + row.pendingPayment + row.overdue,
+      averageDays: row.daysCount ? row.days / row.daysCount : 0,
+    }));
+  }
+
+  function sortProductivityRows(rows) {
+    const sortBy = productivitySortBy?.value || "count";
+    const sorters = {
+      count: (a, b) => b.count - a.count || b.finished - a.finished || b.net - a.net,
+      finished: (a, b) => b.finished - a.finished || b.ontimeRate - a.ontimeRate || b.count - a.count,
+      ontime: (a, b) => b.ontimeRate - a.ontimeRate || b.finished - a.finished || a.overdue - b.overdue,
+      net: (a, b) => b.net - a.net || b.count - a.count,
+      service: (a, b) => b.service - a.service || b.count - a.count,
+      pending: (a, b) => a.pendingTotal - b.pendingTotal || b.ontimeRate - a.ontimeRate || b.count - a.count,
+    };
+    return [...rows].sort(sorters[sortBy] || sorters.count);
+  }
+
+  function bestProductivity(rows, sorter, fallback = "—") {
+    if (!rows.length) return fallback;
+    return [...rows].sort(sorter)[0]?.label || fallback;
+  }
+
+  function renderProductivityCards(rows, items) {
+    if (!productivityCards) return;
+    const filtered = items.length;
+    const totalFinished = items.filter(isFinishedDemand).length;
+    const bestVolume = bestProductivity(rows, (a, b) => b.count - a.count || b.finished - a.finished);
+    const bestDeadline = bestProductivity(rows.filter((row) => row.count > 0), (a, b) => b.ontimeRate - a.ontimeRate || b.finished - a.finished);
+    const bestNet = bestProductivity(rows, (a, b) => b.net - a.net || b.count - a.count);
+    const averageCycle = rows.reduce((total, row) => total + row.days, 0) / Math.max(rows.reduce((total, row) => total + row.daysCount, 0), 1);
+    const cards = [
+      ["OS filtradas", filtered.toLocaleString("pt-BR"), `${totalFinished.toLocaleString("pt-BR")} finalizada(s)/entregue(s)`],
+      ["Maior volume", bestVolume, "Grupo com mais ordens de serviço"],
+      ["Melhor pontualidade", bestDeadline, "Maior percentual dentro do prazo"],
+      ["Maior valor livre", bestNet, "Resultado líquido estimado"],
+      ["Prazo médio operacional", `${averageCycle.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dia(s)`, "Média das OS filtradas"],
+    ];
+    productivityCards.innerHTML = cards.map(([label, value, hint]) => `
+      <article>
+        <small>${escapeHtml(label)}</small>
+        <strong>${escapeHtml(value)}</strong>
+        <span>${escapeHtml(hint)}</span>
+      </article>
+    `).join("");
+  }
+
+  function renderProductivityRows(rows) {
+    if (!productivityRows) return;
+    if (!rows.length) {
+      productivityRows.innerHTML = '<tr><td colspan="7">Nenhum dado de produtividade encontrado para os filtros atuais.</td></tr>';
+      return;
+    }
+    productivityRows.innerHTML = rows.map((row) => `
+      <tr>
+        <td><strong>${escapeHtml(row.label)}</strong><small>Ex.: ${escapeHtml(row.examples.filter(Boolean).map((item) => `OS ${item}`).join(" · ") || "Sem OS")}</small></td>
+        <td>${row.count.toLocaleString("pt-BR")}</td>
+        <td><strong>${row.finished.toLocaleString("pt-BR")}</strong><small>${percent(row.completionRate)}</small></td>
+        <td><strong>${row.ontime.toLocaleString("pt-BR")}</strong><small>${percent(row.ontimeRate)} · ${row.overdue.toLocaleString("pt-BR")} fora</small></td>
+        <td>${row.averageDays.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dia(s)</td>
+        <td>${row.pendingTotal.toLocaleString("pt-BR")}<small>ART: ${row.pendingArt.toLocaleString("pt-BR")} · Pgto: ${row.pendingPayment.toLocaleString("pt-BR")}</small></td>
+        <td><strong>${money(row.service)}</strong><small>Livre: ${money(row.net)}</small></td>
+      </tr>
+    `).join("");
+  }
+
+  function renderProductivityPanel() {
+    const items = demands.filter(productivityMatchesFilters);
+    const rows = sortProductivityRows(productivityRowsFromDemands(items));
+    renderProductivityCards(rows, items);
+    renderProductivityRows(rows);
+    if (productivityStatus) {
+      const groupLabel = productivityGroupBy?.selectedOptions?.[0]?.textContent || "Engenheiro";
+      productivityStatus.textContent = `${items.length.toLocaleString("pt-BR")} demanda(s) analisada(s), agrupadas por ${groupLabel.toLowerCase()}.`;
+      productivityStatus.className = items.length ? "project-status ok" : "project-status warn";
+    }
+  }
+
+  function clearProductivityFilters() {
+    [productivityStartDate, productivityEndDate, productivitySearch].filter(Boolean).forEach((control) => { control.value = ""; });
+    if (productivityGroupBy) productivityGroupBy.value = "engineer";
+    if (productivitySortBy) productivitySortBy.value = "count";
+    renderProductivityPanel();
+  }
+
   function renderReportCards(summary) {
     if (!managementReportCards) return;
     const cards = [
@@ -483,6 +649,7 @@
   function renderDemands(items) {
     demands = Array.isArray(items) ? items : [];
     applyDemandListFilters();
+    renderProductivityPanel();
     renderManagementReport();
   }
 
@@ -1210,6 +1377,7 @@
       demands = [];
       visibleDemands = [];
       updateDemandFilterSummary(0, 0);
+      renderProductivityPanel();
       renderManagementReport();
       if (demandDrilldownPanel) demandDrilldownPanel.hidden = true;
       if (demandDetailPanel) demandDetailPanel.hidden = true;
@@ -1440,6 +1608,11 @@
     control.addEventListener("input", renderManagementReport);
     control.addEventListener("change", renderManagementReport);
   });
+  [productivityStartDate, productivityEndDate, productivityGroupBy, productivitySortBy, productivitySearch].filter(Boolean).forEach((control) => {
+    control.addEventListener("input", renderProductivityPanel);
+    control.addEventListener("change", renderProductivityPanel);
+  });
+  clearProductivityFiltersButton?.addEventListener("click", clearProductivityFilters);
   refreshManagementReportButton?.addEventListener("click", renderManagementReport);
   clearManagementReportFiltersButton?.addEventListener("click", clearManagementReportFilters);
   printManagementReportButton?.addEventListener("click", printManagementReport);

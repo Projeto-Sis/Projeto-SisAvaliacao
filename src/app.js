@@ -151,6 +151,11 @@ const diagnosticSummary = document.querySelector("#diagnosticSummary");
 const reviewVerdict = document.querySelector("#reviewVerdict");
 const reviewMessage = document.querySelector("#reviewMessage");
 const reviewResults = document.querySelector("#reviewResults");
+const issuanceGate = document.querySelector("#issuanceGate");
+const issuanceGateTitle = document.querySelector("#issuanceGateTitle");
+const issuanceGateText = document.querySelector("#issuanceGateText");
+const issuanceGateBadge = document.querySelector("#issuanceGateBadge");
+const reviewCategorySummary = document.querySelector("#reviewCategorySummary");
 const exportStatus = document.querySelector("#exportStatus");
 const projectName = document.querySelector("#projectName");
 const projectStatus = document.querySelector("#projectStatus");
@@ -1596,11 +1601,28 @@ function failedDiagnosticsSummary(diagnostics) {
     : "Ha teste(s) com falha. Analise os cartoes de diagnostico antes de emitir.";
 }
 
+function gradeRank(label) {
+  return { III: 3, II: 2, I: 1 }[label] || 0;
+}
+
+function probableBancoDoBrasilContext() {
+  const source = normalizeText([
+    projectName.value,
+    fields.propertyNotes.value,
+    fields.osNumber.value,
+  ].filter(Boolean).join(" "));
+  return source.includes("banco do brasil") || /\bbb\b/.test(source);
+}
+
+function addIssue(issues, severity, title, detail, anchor, category = "Geral") {
+  issues.push({ severity, title, detail, anchor, category });
+}
+
 function buildReportReview() {
   const r = state.result;
   const validSamples = activeSamples().filter((sample) => sample.price > 0 && sample.area > 0);
   const issues = [];
-  const add = (severity, title, detail, anchor) => issues.push({ severity, title, detail, anchor });
+  const add = (severity, title, detail, anchor, category = "Geral") => addIssue(issues, severity, title, detail, anchor, category);
   const requiredFields = [
     [fields.osNumber, "Numero da OS", "#os"],
     [fields.osDate, "Data da OS", "#os"],
@@ -1612,87 +1634,157 @@ function buildReportReview() {
   ];
 
   requiredFields.forEach(([field, label, anchor]) => {
-    if (!field.value.trim()) add("critical", `${label} nao informado`, "Preencha o campo para completar a identificacao e a rastreabilidade do laudo.", anchor);
+    if (!field.value.trim()) add("critical", `${label} nao informado`, "Preencha o campo para completar a identificacao e a rastreabilidade do laudo.", anchor, "Identificação");
   });
 
   const builtArea = numeric(fields.builtArea.value);
   const landArea = numeric(fields.landArea.value);
-  if (builtArea <= 0) add("critical", "Area construida invalida", "Informe uma area construida maior que zero para calcular o valor total.", "#avaliando");
-  if (landArea <= 0) add("critical", "Area do terreno invalida", "Informe uma area de terreno maior que zero para caracterizar o imovel.", "#avaliando");
+  if (builtArea <= 0) add("critical", "Area construida invalida", "Informe uma area construida maior que zero para calcular o valor total.", "#avaliando", "Caracterização");
+  if (landArea <= 0) add("critical", "Area do terreno invalida", "Informe uma area de terreno maior que zero para caracterizar o imovel.", "#avaliando", "Caracterização");
   if (builtArea > 0 && landArea > 0 && builtArea > landArea * 3) {
-    add("warning", "Relacao entre areas atipica", "A area construida supera tres vezes a area do terreno. Confirme pavimentos e dados cadastrais.", "#avaliando");
+    add("warning", "Relacao entre areas atipica", "A area construida supera tres vezes a area do terreno. Confirme pavimentos e dados cadastrais.", "#avaliando", "Caracterização");
   }
 
   if (fields.state.value.trim() && !/^[A-Za-z]{2}$/.test(fields.state.value.trim())) {
-    add("critical", "UF invalida", "Use a sigla da unidade federativa com duas letras.", "#avaliando");
+    add("critical", "UF invalida", "Use a sigla da unidade federativa com duas letras.", "#avaliando", "Localização");
   }
   const informedCep = fields.postalCode.value.trim();
   if (informedCep && cepDigits(informedCep).length !== 8) {
-    add("warning", "CEP incompleto", "Informe os oito digitos para validar endereco, municipio, UF e codigo IBGE.", "#avaliando");
+    add("warning", "CEP incompleto", "Informe os oito digitos para validar endereco, municipio, UF e codigo IBGE.", "#avaliando", "Localização");
   } else if (informedCep && !fields.ibgeCode.value.trim()) {
-    add("warning", "CEP sem validacao territorial", "Consulte o CEP ou confirme manualmente os dados de localizacao do imovel.", "#avaliando");
+    add("warning", "CEP sem validacao territorial", "Consulte o CEP ou confirme manualmente os dados de localizacao do imovel.", "#avaliando", "Localização");
   }
 
   if (!fields.registrationNumber.value.trim() || !fields.registryOffice.value.trim()) {
-    add("warning", "Identificacao registral incompleta", "Informe matricula e cartorio, ou justifique a indisponibilidade nas observacoes cadastrais.", "#avaliando");
+    add("warning", "Identificacao registral incompleta", "Informe matricula e cartorio, ou justifique a indisponibilidade nas observacoes cadastrais.", "#avaliando", "Documentação");
   }
   if (!fields.inspectionContact.value.trim() || !fields.arrivalTime.value || !fields.departureTime.value) {
-    add("warning", "Registro de vistoria incompleto", "Preencha contato, hora de chegada e hora de saida da vistoria.", "#avaliando");
+    add("warning", "Registro de vistoria incompleto", "Preencha contato, hora de chegada e hora de saida da vistoria.", "#avaliando", "Vistoria");
   }
   if (!fields.latitude.value || !fields.longitude.value) {
-    add("warning", "Coordenadas nao informadas", "Registre latitude e longitude para conferir a localizacao do avaliando.", "#avaliando");
+    add("warning", "Coordenadas nao informadas", "Registre latitude e longitude para conferir a localizacao do avaliando.", "#avaliando", "Localização");
   }
 
   if (fields.osDate.value && fields.inspectionDate.value && fields.inspectionDate.value < fields.osDate.value) {
-    add("warning", "Vistoria anterior a OS", "Confirme as datas, pois a vistoria foi registrada antes da emissao da ordem de servico.", "#os");
+    add("warning", "Vistoria anterior a OS", "Confirme as datas, pois a vistoria foi registrada antes da emissao da ordem de servico.", "#os", "Vistoria");
   }
 
   if (!validSamples.length) {
-    add("critical", "Pesquisa de mercado ausente", "Inclua dados validos com preco e area antes da emissao do laudo.", "#amostras");
+    add("critical", "Pesquisa de mercado ausente", "Inclua dados validos com preco e area antes da emissao do laudo.", "#amostras", "Amostras");
   } else {
     if (r && validSamples.length < 3 * (r.k + 1)) {
-      add("critical", "Amostra insuficiente", `Foram encontrados ${validSamples.length} dados validos para ${r.k} variaveis; o minimo de grau I e ${3 * (r.k + 1)}.`, "#amostras");
+      add("critical", "Amostra insuficiente", `Foram encontrados ${validSamples.length} dados validos para ${r.k} variaveis; o minimo de grau I e ${3 * (r.k + 1)}.`, "#amostras", "Amostras");
     } else if (r && validSamples.length < 4 * (r.k + 1)) {
-      add("warning", "Quantidade abaixo do grau II", `A pesquisa possui ${validSamples.length} dados validos; com ${r.k} variaveis, o grau II requer ${4 * (r.k + 1)}.`, "#amostras");
+      add("warning", "Quantidade abaixo do grau II", `A pesquisa possui ${validSamples.length} dados validos; com ${r.k} variaveis, o grau II requer ${4 * (r.k + 1)}.`, "#amostras", "Amostras");
     }
 
     const missingSources = validSamples.filter((sample) => !String(sample.source || "").trim()).length;
-    if (missingSources) add("warning", "Fontes incompletas", `${missingSources} amostra(s) nao possuem fonte ou endereco identificavel.`, "#amostras");
+    if (missingSources) add("warning", "Fontes incompletas", `${missingSources} amostra(s) nao possuem fonte ou endereco identificavel.`, "#amostras", "Amostras");
     const missingSamplePhotos = validSamples.filter((sample) => !sample.hasPhoto).length;
-    if (missingSamplePhotos) add("warning", "Amostras sem foto", `${missingSamplePhotos} amostra(s) utilizada(s) nao possuem evidencia fotografica marcada.`, "#amostras");
+    if (missingSamplePhotos) add("warning", "Amostras sem foto", `${missingSamplePhotos} amostra(s) utilizada(s) nao possuem evidencia fotografica marcada.`, "#amostras", "Amostras");
     const rejectedWithoutReason = state.samples.filter((sample) => isSampleRejected(sample) && !String(sample.rejectReason || "").trim()).length;
-    if (rejectedWithoutReason) add("warning", "Rejeicao sem justificativa", `${rejectedWithoutReason} amostra(s) rejeitada(s) precisam de motivo documentado.`, "#amostras");
+    if (rejectedWithoutReason) add("warning", "Rejeicao sem justificativa", `${rejectedWithoutReason} amostra(s) rejeitada(s) precisam de motivo documentado.`, "#amostras", "Amostras");
 
     if (builtArea > 0) {
       const areas = validSamples.map((sample) => sample.area);
       const minArea = Math.min(...areas);
       const maxArea = Math.max(...areas);
       if (builtArea < minArea || builtArea > maxArea) {
-        add("warning", "Avaliando fora do intervalo amostral", `A area de ${number(builtArea)} m2 esta fora da faixa pesquisada de ${number(minArea)} a ${number(maxArea)} m2.`, "#amostras");
+        add("warning", "Avaliando fora do intervalo amostral", `A area de ${number(builtArea)} m2 esta fora da faixa pesquisada de ${number(minArea)} a ${number(maxArea)} m2.`, "#amostras", "Amostras");
       }
     }
   }
 
   if (!r || state.error) {
-    add("critical", "Modelo inferencial nao validado", state.error ? `Corrija o calculo: ${state.error}` : "Calcule o modelo para gerar valor, intervalo, fundamentacao e diagnosticos.", "#modelo");
+    add("critical", "Modelo inferencial nao validado", state.error ? `Corrija o calculo: ${state.error}` : "Calcule o modelo para gerar valor, intervalo, fundamentacao e diagnosticos.", "#modelo", "Inferência");
   } else {
-    if (r.foundation === "Pendente") add("critical", "Fundamentacao pendente", "Informe as evidencias dos itens 1 e 3 no quadro de enquadramento normativo.", "#modelo");
-    else if (r.foundation === "Nao enquadrado") add("critical", "Fundamentacao nao enquadrada", "O conjunto de pontos ou os itens obrigatorios nao atingiram os criterios minimos da NBR 14653-2:2011.", "#modelo");
-    if (!Number.isFinite(r.adjR2) || r.adjR2 < 0.7) add("warning", "Poder explicativo reduzido", `O R2 ajustado e ${number(r.adjR2, 3)}. Revise variaveis, dados e especificacao do modelo.`, "#modelo");
-    if (r.diagnostics.overall === "fail") add("critical", "Diagnostico estatistico reprovado", failedDiagnosticsSummary(r.diagnostics), "#modelo");
-    else if (r.diagnostics.overall === "warn") add("warning", "Diagnostico estatistico com ressalvas", "Ha alerta(s) de normalidade, outliers, correlacao ou significancia a justificar.", "#modelo");
+    if (r.foundation === "Pendente") add("critical", "Fundamentacao pendente", "Informe as evidencias dos itens 1 e 3 no quadro de enquadramento normativo.", "#modelo", "NBR / Banco");
+    else if (r.foundation === "Nao enquadrado") add("critical", "Fundamentacao nao enquadrada", "O conjunto de pontos ou os itens obrigatorios nao atingiram os criterios minimos da NBR 14653-2:2011.", "#modelo", "NBR / Banco");
+    if (!Number.isFinite(r.adjR2) || r.adjR2 < 0.7) add("warning", "Poder explicativo reduzido", `O R2 ajustado e ${number(r.adjR2, 3)}. Revise variaveis, dados e especificacao do modelo.`, "#modelo", "Inferência");
+    if (r.diagnostics.overall === "fail") add("critical", "Diagnostico estatistico reprovado", failedDiagnosticsSummary(r.diagnostics), "#modelo", "Inferência");
+    else if (r.diagnostics.overall === "warn") add("warning", "Diagnostico estatistico com ressalvas", "Ha alerta(s) de normalidade, outliers, correlacao ou significancia a justificar.", "#modelo", "Inferência");
     if (r.excludedVariables.length) {
-      add("warning", "Variavel excluida automaticamente", r.excludedVariables.map((item) => `${item.label}: ${item.reason}`).join("; "), "#modelo");
+      add("warning", "Variavel excluida automaticamente", r.excludedVariables.map((item) => `${item.label}: ${item.reason}`).join("; "), "#modelo", "Inferência");
     }
-    if (!Number.isFinite(r.value) || r.value <= 0) add("critical", "Valor de avaliacao invalido", "O modelo nao produziu valor positivo e finito.", "#modelo");
+    if (!Number.isFinite(r.value) || r.value <= 0) add("critical", "Valor de avaliacao invalido", "O modelo nao produziu valor positivo e finito.", "#modelo", "Resultado");
+
+    const adopted = adoptedMarketValue(r);
+    const arbitrationLower = r.value * 0.85;
+    const arbitrationUpper = r.value * 1.15;
+    const withinIc = Number.isFinite(adopted) && adopted >= r.lower && adopted <= r.upper;
+    const withinArbitration = Number.isFinite(adopted) && adopted >= arbitrationLower && adopted <= arbitrationUpper;
+    if (!withinIc) {
+      add("critical", "Valor adotado fora do IC 80%", `O valor adotado ${money(adopted)} precisa ficar dentro do intervalo de confianca de 80% (${money(r.lower)} a ${money(r.upper)}) ou ser tecnicamente revisto.`, "#modelo", "Resultado");
+    }
+    if (!withinArbitration) {
+      add("critical", "Valor adotado fora do campo de arbitrio", `O valor adotado ${money(adopted)} esta fora da faixa ±15% da tendencia central (${money(arbitrationLower)} a ${money(arbitrationUpper)}).`, "#modelo", "Resultado");
+    }
+    if (Number.isFinite(adopted) && Math.abs(adopted - r.value) >= 1 && !fields.finalNotes.value.trim()) {
+      add("warning", "Valor adotado sem observacao final", "Como o valor adotado difere da tendencia central, registre a justificativa tecnica tambem nas observacoes finais do laudo.", "#laudo", "Resultado");
+    }
+
+    const needsBancoDoBrasilGate = probableBancoDoBrasilContext();
+    if (needsBancoDoBrasilGate) {
+      if (gradeRank(r.foundation) < 2) {
+        add("critical", "Banco do Brasil: fundamentacao inferior ao grau II", `O contexto indica Banco do Brasil e o modelo esta em fundamentacao ${r.foundation}. Ajuste evidencias, amostras ou especificacao para grau II ou superior.`, "#modelo", "NBR / Banco");
+      }
+      if (gradeRank(r.precision) < 3) {
+        add("warning", "Banco do Brasil: precisao inferior ao grau III", `O contexto indica Banco do Brasil e a precisao esta em grau ${r.precision}. Revise amostras/modelo se a OS exigir Precisao III.`, "#modelo", "NBR / Banco");
+      }
+    }
+    if (gradeRank(r.foundation) < 2) {
+      add("warning", "Meta de fundamentacao II nao atingida", `Fundamentacao atual: ${r.foundation}. Para operações mais exigentes, revise quantidade de dados, evidencias e significancia.`, "#modelo", "NBR / Banco");
+    }
+    if (gradeRank(r.precision) < 3) {
+      add("warning", "Meta de precisao III nao atingida", `Precisao atual: ${r.precision}; amplitude IC 80%: ${number(r.amplitude, 2)}%.`, "#modelo", "NBR / Banco");
+    }
   }
 
-  add("manual", "Documentacao dominial e cadastral", "Conferir matricula, titularidade, areas documentais, restricoes e eventuais divergencias.", "#laudo");
-  if (!state.reportPhotos.length) add("warning", "Fotos do avaliando ausentes", "Anexe fachada, logradouro, ambientes relevantes e elementos que sustentem padrao/conservacao.", "#laudo");
-  if (!state.reportMap) add("warning", "Mapa/croqui ausente", "Anexe mapa ou croqui de localizacao para fechar a documentacao espacial do laudo.", "#laudo");
-  add("manual", "Registro fotografico e localizacao", "Confirmar fachada, logradouro, ambientes relevantes e mapa ou croqui do imovel.", "#laudo");
-  add("manual", "Responsabilidade tecnica", fields.artRrt.value.trim() ? `Conferir ${fields.artRrt.value.trim()} e colher a assinatura do responsavel tecnico.` : "Anexar ART/RRT e colher a assinatura do responsavel tecnico antes da entrega.", "#avaliando");
+  add("manual", "Documentacao dominial e cadastral", "Conferir matricula, titularidade, areas documentais, restricoes e eventuais divergencias.", "#laudo", "Documentação");
+  if (!state.reportPhotos.length) add("warning", "Fotos do avaliando ausentes", "Anexe fachada, logradouro, ambientes relevantes e elementos que sustentem padrao/conservacao.", "#laudo", "Anexos");
+  else if (state.reportPhotos.length < 4) add("warning", "Registro fotografico reduzido", "Recomenda-se anexar ao menos fachada, logradouro, ambiente interno e elemento construtivo relevante.", "#laudo", "Anexos");
+  if (!state.reportMap) add("warning", "Mapa/croqui ausente", "Anexe mapa ou croqui de localizacao para fechar a documentacao espacial do laudo.", "#laudo", "Anexos");
+  add("manual", "Registro fotografico e localizacao", "Confirmar fachada, logradouro, ambientes relevantes e mapa ou croqui do imovel.", "#laudo", "Anexos");
+  add("manual", "Responsabilidade tecnica", fields.artRrt.value.trim() ? `Conferir ${fields.artRrt.value.trim()} e colher a assinatura do responsavel tecnico.` : "Anexar ART/RRT e colher a assinatura do responsavel tecnico antes da entrega.", "#avaliando", "Responsabilidade técnica");
   return issues;
+}
+
+function renderIssuanceGate(counts) {
+  if (!issuanceGate) return;
+  const stateClass = counts.critical ? "fail" : counts.warning ? "warn" : "ok";
+  issuanceGate.className = `issuance-gate ${stateClass}`;
+  issuanceGateBadge.className = `pill ${stateClass === "ok" ? "" : stateClass}`.trim();
+  if (counts.critical) {
+    issuanceGateTitle.textContent = "Não emitir ainda";
+    issuanceGateText.textContent = `Há ${counts.critical} pendência(s) crítica(s). O PDF final fica bloqueado até a correção.`;
+    issuanceGateBadge.textContent = "Bloqueado";
+  } else if (counts.warning) {
+    issuanceGateTitle.textContent = "Apto com ressalvas técnicas";
+    issuanceGateText.textContent = `Não há crítica bloqueante, mas existem ${counts.warning} alerta(s). Justifique ou revise antes da entrega.`;
+    issuanceGateBadge.textContent = "Com ressalvas";
+  } else {
+    issuanceGateTitle.textContent = "Pronto para emissão";
+    issuanceGateText.textContent = "Campos, amostras, inferência e anexos obrigatórios foram aprovados pela revisão automática. Realize apenas as conferências manuais finais.";
+    issuanceGateBadge.textContent = "Pronto";
+  }
+}
+
+function renderReviewCategorySummary(issues) {
+  if (!reviewCategorySummary) return;
+  const categories = ["Identificação", "Caracterização", "Localização", "Documentação", "Vistoria", "Amostras", "Inferência", "NBR / Banco", "Resultado", "Anexos", "Responsabilidade técnica"];
+  reviewCategorySummary.innerHTML = categories.map((category) => {
+    const items = issues.filter((item) => item.category === category);
+    const critical = items.filter((item) => item.severity === "critical").length;
+    const warning = items.filter((item) => item.severity === "warning").length;
+    const manual = items.filter((item) => item.severity === "manual").length;
+    const status = critical ? "fail" : warning ? "warn" : "ok";
+    const detail = critical ? `${critical} crítica(s)` : warning ? `${warning} alerta(s)` : manual ? `${manual} conferência(s)` : "OK";
+    return `
+      <article class="${status}">
+        <small>${escapeHtml(category)}</small>
+        <strong>${escapeHtml(detail)}</strong>
+      </article>`;
+  }).join("");
 }
 
 function renderReportReview() {
@@ -1710,16 +1802,18 @@ function renderReportReview() {
     : counts.warning
       ? "O laudo pode avancar apos justificativa dos alertas tecnicos."
       : "As verificacoes automaticas foram atendidas; conclua as conferencias manuais.";
+  renderIssuanceGate(counts);
+  renderReviewCategorySummary(issues);
   document.querySelector("#reviewCriticalCount").textContent = counts.critical;
   document.querySelector("#reviewWarningCount").textContent = counts.warning;
   document.querySelector("#reviewManualCount").textContent = counts.manual;
-  reviewResults.innerHTML = issues.map((item) => `
+  reviewResults.innerHTML = issues.length ? issues.map((item) => `
     <article class="review-item ${item.severity}">
       <span class="review-icon" aria-hidden="true">${item.severity === "critical" ? "!" : item.severity === "warning" ? "!" : "i"}</span>
-      <div><strong>${item.title}</strong><p>${item.detail}</p></div>
+      <div><small>${escapeHtml(item.category || "Geral")}</small><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div>
       <a href="${item.anchor}">${item.severity === "manual" ? "Verificar" : "Corrigir"}</a>
     </article>
-  `).join("");
+  `).join("") : '<article class="review-item"><span class="review-icon" aria-hidden="true">✓</span><div><small>Checklist</small><strong>Sem pendências automáticas</strong><p>O laudo está pronto para emissão, condicionado às conferências manuais e responsabilidade técnica.</p></div><a href="#laudo">Emitir</a></article>';
   return { issues, counts, verdict };
 }
 
@@ -3286,6 +3380,13 @@ async function exportPdfReport() {
 }
 
 async function exportHtmlReport() {
+  const review = renderReportReview();
+  if (review.counts.critical) {
+    setExportStatus(`${review.counts.critical} pendencia(s) critica(s). Corrija antes de exportar o HTML final.`, "fail");
+    location.hash = "laudo";
+    reviewResults.querySelector(".review-item.critical")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   const templateBlob = await fetch("assets/template-mma.png").then((response) => response.blob());
   const templateDataUrl = await blobToDataUrl(templateBlob);
   const styles = collectReportStyles(templateDataUrl);

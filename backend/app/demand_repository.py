@@ -101,6 +101,37 @@ class DemandRepository:
         self.ensure_demand_proponent_columns()
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
             raw_search = search.strip() if search and search.strip() else None
+            base_select = """
+                SELECT d.*, cb.name AS bank_name, p.name AS partner_name, e.name AS engineer_name,
+                       (CURRENT_DATE - d.arrival_date) AS current_execution_days
+                FROM demands d
+                JOIN client_banks cb ON cb.id = d.client_bank_id
+                LEFT JOIN partners p ON p.id = d.partner_id
+                LEFT JOIN engineers e ON e.id = d.engineer_id
+            """
+            if not raw_search:
+                cursor.execute(
+                    f"""
+                    {base_select}
+                    ORDER BY d.client_deadline, d.created_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                rows = cursor.fetchall()
+                for row in rows:
+                    row["days_execution"] = execution_days(row["arrival_date"], row["system_finished_at"])
+                    row["deadline_status"] = deadline_status(
+                        row["arrival_date"], row["deadline_days"], row["system_finished_at"]
+                    )
+                    row["estimated_net_value"] = (
+                        (row["service_value"] or 0) - (row["partner_fee"] or 0) - (row["art_value"] or 0)
+                    )
+                    row["partner_fee_percentage"] = (
+                        (row["partner_fee"] / row["service_value"] * 100)
+                        if row["partner_fee"] and row["service_value"] else 0
+                    )
+                return rows
             search_term = f"%{raw_search}%" if raw_search else None
             search_digits = self._digits(raw_search)
             digit_term = f"%{search_digits}%" if search_digits else None

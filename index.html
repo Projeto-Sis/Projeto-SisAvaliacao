@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISAVALIA</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa8-integracao-avaliacao" />
+    <link rel="stylesheet" href="src/styles.css?v=20260721-etapa12-produtividade" />
   </head>
   <body class="auth-locked">
     <section id="loginGate" class="login-gate" aria-labelledby="loginTitle">
@@ -310,6 +310,60 @@
               <span><i class="legend-gross"></i>Faturamento</span>
               <span><i class="legend-fees"></i>Honorários</span>
               <span><i class="legend-net"></i>Resultado líquido</span>
+            </div>
+          </div>
+          <div id="productivityPanel" class="productivity-panel" aria-labelledby="productivityPanelTitle">
+            <div class="financial-evolution-heading">
+              <div>
+                <span class="financial-kicker">Painel de produtividade</span>
+                <h3 id="productivityPanelTitle">Produção operacional por responsável</h3>
+                <p>Compare volume de OS, finalizações, pontualidade, pendências e resultado financeiro por engenheiro, parceiro, banco ou cidade.</p>
+              </div>
+              <span class="pill">Etapa 12</span>
+            </div>
+            <div class="demand-filter-panel productivity-filters" aria-label="Filtros do painel de produtividade">
+              <label>Chegada inicial<input id="productivityStartDate" type="date" /></label>
+              <label>Chegada final<input id="productivityEndDate" type="date" /></label>
+              <label>Agrupar por<select id="productivityGroupBy">
+                <option value="engineer">Engenheiro</option>
+                <option value="partner">Parceiro</option>
+                <option value="bank">Banco / cliente</option>
+                <option value="city">Cidade / UF</option>
+                <option value="status">Situação</option>
+              </select></label>
+              <label>Ordenar por<select id="productivitySortBy">
+                <option value="count">Total de OS</option>
+                <option value="finished">Finalizadas</option>
+                <option value="ontime">Pontualidade</option>
+                <option value="net">Valor livre</option>
+                <option value="service">Valor dos serviços</option>
+                <option value="pending">Menos pendências</option>
+              </select></label>
+              <label class="span-2">Busca<input id="productivitySearch" placeholder="Responsável, banco, cidade, OS ou CPF" /></label>
+              <div class="demand-filter-actions">
+                <button id="clearProductivityFiltersBtn" class="ghost-button" type="button">Limpar filtros</button>
+                <span id="productivityStatus" class="project-status">Painel aguardando dados do Controle de Demanda.</span>
+              </div>
+            </div>
+            <div id="productivityCards" class="productivity-cards"></div>
+            <div class="productivity-table-section">
+              <h4>Ranking de produtividade</h4>
+              <div class="table-wrap">
+                <table class="demand-table productivity-table">
+                  <thead>
+                    <tr>
+                      <th>Grupo</th>
+                      <th>OS</th>
+                      <th>Finalizadas</th>
+                      <th>Dentro do prazo</th>
+                      <th>Prazo médio</th>
+                      <th>Pendências</th>
+                      <th>Financeiro</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productivityRows"><tr><td colspan="7">Nenhum dado carregado.</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
           <div id="managementReportPanel" class="management-report-panel" aria-labelledby="managementReportTitle">
@@ -870,6 +924,15 @@
               <div class="review-counter warning"><strong id="reviewWarningCount">0</strong><span>Alertas</span></div>
               <div class="review-counter manual"><strong id="reviewManualCount">0</strong><span>Manuais</span></div>
             </div>
+            <div id="issuanceGate" class="issuance-gate warn" aria-live="polite">
+              <div>
+                <span class="financial-kicker">Checklist de emissão</span>
+                <h4 id="issuanceGateTitle">Aguardando revisão final</h4>
+                <p id="issuanceGateText">Clique em Revisar agora para validar campos, amostras, inferência, anexos e critérios Banco do Brasil/NBR.</p>
+              </div>
+              <span id="issuanceGateBadge" class="pill warn">Pré-validação</span>
+            </div>
+            <div id="reviewCategorySummary" class="review-category-summary" aria-label="Resumo das pendências por categoria"></div>
             <div id="reviewResults" class="review-results"></div>
           </div>
           <article id="reportPreview" class="report-preview"></article>
@@ -896,8 +959,8 @@
         </section>
       </main>
     </div>
-    <script src="src/app.js?v=20260720-etapa8-integracao-avaliacao"></script>
+    <script src="src/app.js?v=20260720-etapa9-checklist-emissao"></script>
     <script src="src/search-engine.js?v=20260702-2010"></script>
-    <script src="src/demand-control.js?v=20260720-etapa8-integracao-avaliacao"></script>
+    <script src="src/demand-control.js?v=20260721-etapa12-produtividade"></script>
   </body>
 </html>
