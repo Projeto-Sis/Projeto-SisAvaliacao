@@ -50,6 +50,26 @@
   const demandDetailSummary = document.querySelector("#demandDetailSummary");
   const demandDetailBody = document.querySelector("#demandDetailBody");
   const closeDemandDetailButton = document.querySelector("#closeDemandDetailBtn");
+  const reportStartDate = document.querySelector("#reportStartDate");
+  const reportEndDate = document.querySelector("#reportEndDate");
+  const reportBank = document.querySelector("#reportBank");
+  const reportStatus = document.querySelector("#reportStatus");
+  const reportDeadline = document.querySelector("#reportDeadline");
+  const reportPayment = document.querySelector("#reportPayment");
+  const reportArt = document.querySelector("#reportArt");
+  const reportSearch = document.querySelector("#reportSearch");
+  const managementReportStatus = document.querySelector("#managementReportStatus");
+  const managementReportPeriod = document.querySelector("#managementReportPeriod");
+  const managementReportGeneratedAt = document.querySelector("#managementReportGeneratedAt");
+  const managementReportCards = document.querySelector("#managementReportCards");
+  const reportByBank = document.querySelector("#reportByBank");
+  const reportByEngineer = document.querySelector("#reportByEngineer");
+  const reportByPartner = document.querySelector("#reportByPartner");
+  const reportCriticalIssues = document.querySelector("#reportCriticalIssues");
+  const managementReportRows = document.querySelector("#managementReportRows");
+  const refreshManagementReportButton = document.querySelector("#refreshManagementReportBtn");
+  const printManagementReportButton = document.querySelector("#printManagementReportBtn");
+  const clearManagementReportFiltersButton = document.querySelector("#clearManagementReportFiltersBtn");
   let demands = [];
   let visibleDemands = [];
   let financialItems = [];
@@ -147,6 +167,7 @@
   function populateDemandFilterBanks(items) {
     if (!demandFilterBank) return;
     demandFilterBank.innerHTML = options(items, "Todos os bancos");
+    if (reportBank) reportBank.innerHTML = options(items, "Todos os bancos");
   }
 
   function statusOptions(values, selected) {
@@ -244,6 +265,180 @@
     return { serviceValue, partnerFee, artValue, netValue, partnerPercent, artPercent };
   }
 
+  function dateValue(value) {
+    if (!value) return null;
+    const date = new Date(`${value}T12:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function reportMatchesFilters(item) {
+    const arrival = dateValue(item.arrival_date);
+    const start = dateValue(reportStartDate?.value);
+    const end = dateValue(reportEndDate?.value);
+    const search = normalize(reportSearch?.value || "");
+    if (start && arrival && arrival < start) return false;
+    if (end && arrival && arrival > end) return false;
+    if (reportBank?.value && item.client_bank_id !== reportBank.value) return false;
+    if (reportStatus?.value && item.demand_status !== reportStatus.value) return false;
+    if (reportDeadline?.value && item.deadline_status !== reportDeadline.value) return false;
+    if (reportPayment?.value && item.payment_status !== reportPayment.value) return false;
+    if (reportArt?.value && item.art_status !== reportArt.value) return false;
+    if (search && !demandSearchText(item).includes(search)) return false;
+    return true;
+  }
+
+  function reportFilteredDemands() {
+    return demands.filter(reportMatchesFilters);
+  }
+
+  function reportTotals(items) {
+    return items.reduce((summary, item) => {
+      const financial = demandFinancialSummary(item);
+      summary.total += 1;
+      summary.overdue += item.deadline_status === "Fora do prazo" ? 1 : 0;
+      summary.pendingArt += item.art_status === "Pendente" ? 1 : 0;
+      summary.pendingPayment += ["Não realizado", "Parcial"].includes(item.payment_status) ? 1 : 0;
+      summary.service += financial.serviceValue;
+      summary.partner += financial.partnerFee;
+      summary.art += financial.artValue;
+      summary.net += financial.netValue;
+      return summary;
+    }, { total: 0, overdue: 0, pendingArt: 0, pendingPayment: 0, service: 0, partner: 0, art: 0, net: 0 });
+  }
+
+  function renderReportCards(summary) {
+    if (!managementReportCards) return;
+    const cards = [
+      ["Demandas", summary.total.toLocaleString("pt-BR")],
+      ["Fora do prazo", summary.overdue.toLocaleString("pt-BR")],
+      ["ART pendente", summary.pendingArt.toLocaleString("pt-BR")],
+      ["Pagamento pendente", summary.pendingPayment.toLocaleString("pt-BR")],
+      ["Valor dos serviços", money(summary.service)],
+      ["Honorários parceiros", money(summary.partner)],
+      ["Valor das ARTs", money(summary.art)],
+      ["Valor livre das OS", money(summary.net)],
+    ];
+    managementReportCards.innerHTML = cards.map(([label, value]) => `
+      <article>
+        <small>${escapeHtml(label)}</small>
+        <strong>${escapeHtml(value)}</strong>
+      </article>
+    `).join("");
+  }
+
+  function groupedReport(items, keyFn) {
+    const groups = new Map();
+    items.forEach((item) => {
+      const key = keyFn(item) || "Não informado";
+      const current = groups.get(key) || { label: key, count: 0, service: 0, net: 0, pending: 0, overdue: 0 };
+      const financial = demandFinancialSummary(item);
+      current.count += 1;
+      current.service += financial.serviceValue;
+      current.net += financial.netValue;
+      current.pending += ["Não realizado", "Parcial"].includes(item.payment_status) ? 1 : 0;
+      current.overdue += item.deadline_status === "Fora do prazo" ? 1 : 0;
+      groups.set(key, current);
+    });
+    return Array.from(groups.values()).sort((a, b) => b.count - a.count || b.service - a.service);
+  }
+
+  function renderGroupedReport(target, rows, emptyText) {
+    if (!target) return;
+    if (!rows.length) {
+      target.innerHTML = `<div class="registry-empty">${escapeHtml(emptyText)}</div>`;
+      return;
+    }
+    target.innerHTML = rows.map((row) => `
+      <article>
+        <div>
+          <strong>${escapeHtml(row.label)}</strong>
+          <small>${row.count.toLocaleString("pt-BR")} demanda(s) · ${row.overdue.toLocaleString("pt-BR")} fora do prazo · ${row.pending.toLocaleString("pt-BR")} pgto. pendente</small>
+        </div>
+        <span>${money(row.net)}</span>
+      </article>
+    `).join("");
+  }
+
+  function renderCriticalIssues(items) {
+    if (!reportCriticalIssues) return;
+    const issues = [
+      { label: "Fora do prazo", items: items.filter((item) => item.deadline_status === "Fora do prazo") },
+      { label: "ART pendente", items: items.filter((item) => item.art_status === "Pendente") },
+      { label: "Pagamento pendente", items: items.filter((item) => ["Não realizado", "Parcial"].includes(item.payment_status)) },
+      { label: "Sem engenheiro", items: items.filter((item) => !item.engineer_id) },
+      { label: "Sem parceiro", items: items.filter((item) => !item.partner_id) },
+    ].filter((issue) => issue.items.length);
+    if (!issues.length) {
+      reportCriticalIssues.innerHTML = '<div class="registry-empty">Nenhuma pendência crítica nos filtros atuais.</div>';
+      return;
+    }
+    reportCriticalIssues.innerHTML = issues.map((issue) => `
+      <article>
+        <div>
+          <strong>${escapeHtml(issue.label)}</strong>
+          <small>${issue.items.slice(0, 4).map((item) => `OS ${item.os_number}`).join(" · ")}${issue.items.length > 4 ? " · ..." : ""}</small>
+        </div>
+        <span>${issue.items.length.toLocaleString("pt-BR")}</span>
+      </article>
+    `).join("");
+  }
+
+  function renderReportRows(items) {
+    if (!managementReportRows) return;
+    if (!items.length) {
+      managementReportRows.innerHTML = '<tr><td colspan="7">Nenhuma demanda encontrada para os filtros do relatório.</td></tr>';
+      return;
+    }
+    managementReportRows.innerHTML = items.map((item) => {
+      const financial = demandFinancialSummary(item);
+      return `
+        <tr class="${item.deadline_status === "Fora do prazo" ? "demand-overdue" : ""}">
+          <td><strong>${escapeHtml(formatDate(item.client_deadline))}</strong><small>${escapeHtml(item.deadline_status)}</small></td>
+          <td>${escapeHtml(item.bank_name || "Não informado")}</td>
+          <td><strong>${escapeHtml(item.os_number || "-")}</strong><small>${escapeHtml(item.proponent_name || "Proponente não informado")}</small></td>
+          <td>${escapeHtml([item.city, item.state_code].filter(Boolean).join("/") || "Não informado")}</td>
+          <td>${escapeHtml(item.engineer_name || "Eng. não definido")}<small>${escapeHtml(item.partner_name || "Parceiro não definido")}</small></td>
+          <td>${escapeHtml(item.demand_status || "-")}<small>ART: ${escapeHtml(item.art_status || "-")} · Pgto: ${escapeHtml(item.payment_status || "-")}</small></td>
+          <td><strong>${money(financial.serviceValue)}</strong><small>Livre: ${money(financial.netValue)}</small></td>
+        </tr>`;
+    }).join("");
+  }
+
+  function renderManagementReport() {
+    const items = reportFilteredDemands();
+    const summary = reportTotals(items);
+    renderReportCards(summary);
+    renderGroupedReport(reportByBank, groupedReport(items, (item) => item.bank_name), "Nenhum banco/cliente no relatório.");
+    renderGroupedReport(reportByEngineer, groupedReport(items, (item) => item.engineer_name), "Nenhum engenheiro no relatório.");
+    renderGroupedReport(reportByPartner, groupedReport(items, (item) => item.partner_name), "Nenhum parceiro no relatório.");
+    renderCriticalIssues(items);
+    renderReportRows(items);
+    const startLabel = reportStartDate?.value ? formatDate(reportStartDate.value) : "início";
+    const endLabel = reportEndDate?.value ? formatDate(reportEndDate.value) : "fim";
+    if (managementReportPeriod) managementReportPeriod.textContent = `Período: ${startLabel} a ${endLabel}. Registros considerados: ${items.length.toLocaleString("pt-BR")}.`;
+    if (managementReportGeneratedAt) managementReportGeneratedAt.textContent = `Gerado em ${new Date().toLocaleString("pt-BR")}`;
+    if (managementReportStatus) {
+      managementReportStatus.textContent = `${items.length.toLocaleString("pt-BR")} demanda(s) no relatório. Impressão/PDF disponível.`;
+      managementReportStatus.className = items.length ? "project-status ok" : "project-status warn";
+    }
+  }
+
+  function clearManagementReportFilters() {
+    [reportStartDate, reportEndDate, reportBank, reportStatus, reportDeadline, reportPayment, reportArt, reportSearch]
+      .filter(Boolean)
+      .forEach((control) => { control.value = ""; });
+    renderManagementReport();
+  }
+
+  function printManagementReport() {
+    renderManagementReport();
+    document.body.classList.add("printing-management-report");
+    const cleanup = () => document.body.classList.remove("printing-management-report");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    setTimeout(cleanup, 1200);
+  }
+
   function renderDemandRows(items) {
     visibleDemands = items;
     if (!items.length) {
@@ -288,6 +483,7 @@
   function renderDemands(items) {
     demands = Array.isArray(items) ? items : [];
     applyDemandListFilters();
+    renderManagementReport();
   }
 
   function demandPayloadFromItem(item, overrides = {}) {
@@ -936,6 +1132,9 @@
           tableBody.innerHTML = `<tr><td colspan="9">${escapeHtml(demandList.value.warning)}</td></tr>`;
         }
       } else {
+        demands = [];
+        visibleDemands = [];
+        renderManagementReport();
         tableBody.innerHTML = '<tr><td colspan="9">Lista de demandas indisponível no momento. Cadastre uma nova demanda ou tente recarregar.</td></tr>';
       }
 
@@ -969,6 +1168,7 @@
       demands = [];
       visibleDemands = [];
       updateDemandFilterSummary(0, 0);
+      renderManagementReport();
       if (demandDrilldownPanel) demandDrilldownPanel.hidden = true;
       if (demandDetailPanel) demandDetailPanel.hidden = true;
       const help = backendHelpMessage(error);
@@ -1194,6 +1394,13 @@
     [demandListSearch, demandFilterBank, demandFilterStatus, demandFilterDeadline, demandFilterPayment].filter(Boolean).forEach((control) => { control.value = ""; });
     applyDemandListFilters();
   });
+  [reportStartDate, reportEndDate, reportBank, reportStatus, reportDeadline, reportPayment, reportArt, reportSearch].filter(Boolean).forEach((control) => {
+    control.addEventListener("input", renderManagementReport);
+    control.addEventListener("change", renderManagementReport);
+  });
+  refreshManagementReportButton?.addEventListener("click", renderManagementReport);
+  clearManagementReportFiltersButton?.addEventListener("click", clearManagementReportFilters);
+  printManagementReportButton?.addEventListener("click", printManagementReport);
   closeDemandDetailButton?.addEventListener("click", () => {
     if (demandDetailPanel) demandDetailPanel.hidden = true;
   });

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISAVALIA</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa6-demanda-avaliacao" />
+    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa7-relatorios-pdf" />
   </head>
   <body class="auth-locked">
     <section id="loginGate" class="login-gate" aria-labelledby="loginTitle">
@@ -310,6 +310,101 @@
               <span><i class="legend-gross"></i>Faturamento</span>
               <span><i class="legend-fees"></i>Honorários</span>
               <span><i class="legend-net"></i>Resultado líquido</span>
+            </div>
+          </div>
+          <div id="managementReportPanel" class="management-report-panel" aria-labelledby="managementReportTitle">
+            <div class="financial-evolution-heading">
+              <div>
+                <span class="financial-kicker">Relatórios gerenciais</span>
+                <h3 id="managementReportTitle">Resumo para acompanhamento e impressão</h3>
+                <p>Visualize demandas, pendências, responsáveis e resultado financeiro. Use “Imprimir / PDF” para salvar pelo navegador.</p>
+              </div>
+              <div class="inline-actions">
+                <button id="refreshManagementReportBtn" class="secondary-button" type="button">Atualizar relatório</button>
+                <button id="printManagementReportBtn" class="primary-button" type="button">Imprimir / PDF</button>
+              </div>
+            </div>
+            <div class="demand-filter-panel management-report-filters" aria-label="Filtros dos relatórios gerenciais">
+              <label>Chegada inicial<input id="reportStartDate" type="date" /></label>
+              <label>Chegada final<input id="reportEndDate" type="date" /></label>
+              <label>Banco<select id="reportBank"><option value="">Todos os bancos</option></select></label>
+              <label>Situação<select id="reportStatus">
+                <option value="">Todas</option>
+                <option>Recebida</option>
+                <option>Em análise</option>
+                <option>Agendada</option>
+                <option>Vistoria realizada</option>
+                <option>Em elaboração</option>
+                <option>Finalizada</option>
+                <option>Entregue</option>
+                <option>Cancelada</option>
+                <option>Não entregue</option>
+              </select></label>
+              <label>Prazo<select id="reportDeadline">
+                <option value="">Todos</option>
+                <option>Dentro do prazo</option>
+                <option>Fora do prazo</option>
+              </select></label>
+              <label>Pagamento<select id="reportPayment">
+                <option value="">Todos</option>
+                <option>Não realizado</option>
+                <option>Pagamento realizado</option>
+                <option>Parcial</option>
+                <option>Cancelado</option>
+                <option>Não se aplica</option>
+              </select></label>
+              <label>ART<select id="reportArt">
+                <option value="">Todas</option>
+                <option>Pendente</option>
+                <option>ART paga</option>
+                <option>Isento</option>
+                <option>Cancelada</option>
+              </select></label>
+              <label class="span-2">Busca complementar<input id="reportSearch" placeholder="OS, CPF, proponente, engenheiro, parceiro, cidade ou UF" /></label>
+              <div class="demand-filter-actions">
+                <button id="clearManagementReportFiltersBtn" class="ghost-button" type="button">Limpar filtros</button>
+                <span id="managementReportStatus" class="project-status">Relatório aguardando dados do Controle de Demanda.</span>
+              </div>
+            </div>
+            <div id="managementReportPrintable" class="management-report-printable">
+              <div class="management-report-cover">
+                <div>
+                  <span class="financial-kicker">SISAVALIA · Módulo de Gestão</span>
+                  <h3>Relatório Gerencial de Demandas</h3>
+                  <p id="managementReportPeriod">Período: todos os registros carregados.</p>
+                </div>
+                <strong id="managementReportGeneratedAt">Gerado em —</strong>
+              </div>
+              <div id="managementReportCards" class="management-report-cards"></div>
+              <div class="management-report-grid">
+                <section>
+                  <h4>Demandas por banco/cliente</h4>
+                  <div id="reportByBank" class="management-report-list"></div>
+                </section>
+                <section>
+                  <h4>Demandas por engenheiro</h4>
+                  <div id="reportByEngineer" class="management-report-list"></div>
+                </section>
+                <section>
+                  <h4>Demandas por parceiro</h4>
+                  <div id="reportByPartner" class="management-report-list"></div>
+                </section>
+                <section>
+                  <h4>Pendências críticas</h4>
+                  <div id="reportCriticalIssues" class="management-report-list"></div>
+                </section>
+              </div>
+              <section class="management-report-table-section">
+                <h4>Extrato das demandas do relatório</h4>
+                <div class="table-wrap">
+                  <table class="demand-table management-report-table">
+                    <thead>
+                      <tr><th>Prazo</th><th>Banco</th><th>OS</th><th>Cidade/UF</th><th>Responsáveis</th><th>Status</th><th>Financeiro</th></tr>
+                    </thead>
+                    <tbody id="managementReportRows"><tr><td colspan="7">Nenhum dado carregado.</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
             </div>
           </div>
         </section>
@@ -801,8 +896,8 @@
         </section>
       </main>
     </div>
-    <script src="src/app.js?v=20260720-etapa6-demanda-avaliacao"></script>
+    <script src="src/app.js?v=20260720-etapa7-relatorios-pdf"></script>
     <script src="src/search-engine.js?v=20260702-2010"></script>
-    <script src="src/demand-control.js?v=20260720-etapa6-demanda-avaliacao"></script>
+    <script src="src/demand-control.js?v=20260720-etapa7-relatorios-pdf"></script>
   </body>
 </html>

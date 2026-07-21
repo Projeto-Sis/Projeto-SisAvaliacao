@@ -2152,6 +2152,104 @@ label { color: #52647a; font-weight: 600; }
 .legend-gross { background: var(--blue); }
 .legend-fees { background: var(--amber); }
 .legend-net { background: var(--cyan); }
+.management-report-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid rgba(0, 94, 184, 0.12);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f7fbff);
+  box-shadow: var(--shadow-sm);
+}
+.management-report-filters {
+  margin: 0;
+  background: #fff;
+}
+.management-report-printable {
+  display: grid;
+  gap: 16px;
+}
+.management-report-cover {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--amber);
+  border-radius: 14px;
+  background: #fff;
+}
+.management-report-cover h3 { margin: 4px 0 6px; color: var(--navy); font-size: 20px; }
+.management-report-cover p { margin: 0; font-size: 13px; color: var(--muted); }
+.management-report-cover > strong { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.management-report-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.management-report-cards article {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--cyan);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(7, 59, 114, 0.04);
+}
+.management-report-cards article:nth-child(2),
+.management-report-cards article:nth-child(3),
+.management-report-cards article:nth-child(4) { border-top-color: var(--amber); }
+.management-report-cards small,
+.management-report-cards strong { display: block; }
+.management-report-cards small { color: var(--muted); font-size: 11px; }
+.management-report-cards strong { margin-top: 5px; color: var(--navy); font-size: 20px; }
+.management-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.management-report-grid section,
+.management-report-table-section {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.management-report-grid h4,
+.management-report-table-section h4 {
+  margin: 0 0 10px;
+  color: var(--navy);
+}
+.management-report-list {
+  display: grid;
+  gap: 8px;
+}
+.management-report-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fbfe;
+}
+.management-report-list strong,
+.management-report-list small { display: block; }
+.management-report-list small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.management-report-list span {
+  justify-self: end;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e5f3fc;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.management-report-table td,
+.management-report-table th { font-size: 12px; }
 .demand-register-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .demand-register-grid .form-grid { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
 .registry-list { display: grid; gap: 7px; padding: 0 16px 16px; }
@@ -2263,6 +2361,39 @@ tbody tr:hover { background: #f3f8fc; }
   body.printing-report .print-template { display: block; position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; }
   body.printing-report .mma-template-content,
   body.printing-report .doc-footer-note { z-index: 1; }
+
+  html, body.printing-management-report { width: 210mm; margin: 0; padding: 0; background: white; }
+  body.printing-management-report .sidebar,
+  body.printing-management-report .topbar,
+  body.printing-management-report .band:not(#financeiro),
+  body.printing-management-report #financeiro > .section-heading,
+  body.printing-management-report .financial-evolution,
+  body.printing-management-report .management-report-filters,
+  body.printing-management-report #managementReportPanel > .financial-evolution-heading .inline-actions { display: none !important; }
+  body.printing-management-report .app-shell { display: block; min-height: 0; }
+  body.printing-management-report .workspace,
+  body.printing-management-report #financeiro {
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: white;
+    overflow: visible;
+  }
+  body.printing-management-report #managementReportPanel {
+    margin: 0;
+    padding: 12mm;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-management-report .management-report-grid,
+  body.printing-management-report .management-report-cards { break-inside: avoid; page-break-inside: avoid; }
+  body.printing-management-report .management-report-table-section { break-before: auto; page-break-before: auto; }
+  body.printing-management-report button { display: none !important; }
 }
 
 @media (max-width: 760px) {
@@ -2282,9 +2413,9 @@ tbody tr:hover { background: #f3f8fc; }
   .nav-list li::before { display: block; }
   .steps a { text-align: left; padding: 9px 10px; }
   .inline-actions { flex-wrap: wrap; }
-  .form-grid, .metrics-grid, .split, .charts-grid, .variable-panel, .variable-row, .diagnostic-grid, .review-summary, .foundation-evidence-grid, .ts-projection-grid, .variable-catalog-grid, .attachment-gallery, .search-engine-grid, .search-engine-notice, .url-capture-panel, .url-capture-preview, .demand-dashboard, .financial-summary, .demand-register-grid, .demand-register-grid .form-grid, .demand-filter-panel, .demand-detail-body, .demand-detail-grid, .demand-detail-metrics, .demand-timeline { grid-template-columns: 1fr; }
+  .form-grid, .metrics-grid, .split, .charts-grid, .variable-panel, .variable-row, .diagnostic-grid, .review-summary, .foundation-evidence-grid, .ts-projection-grid, .variable-catalog-grid, .attachment-gallery, .search-engine-grid, .search-engine-notice, .url-capture-panel, .url-capture-preview, .demand-dashboard, .financial-summary, .management-report-cards, .management-report-grid, .demand-register-grid, .demand-register-grid .form-grid, .demand-filter-panel, .demand-detail-body, .demand-detail-grid, .demand-detail-metrics, .demand-timeline { grid-template-columns: 1fr; }
   .financial-evolution-heading { flex-direction: column; }
-  .evaluation-demand-controls, .evaluation-demand-match, .demand-drilldown-heading, .demand-drilldown-item { grid-template-columns: 1fr; }
+  .evaluation-demand-controls, .evaluation-demand-match, .demand-drilldown-heading, .demand-drilldown-item, .management-report-list article, .management-report-cover { grid-template-columns: 1fr; }
   .demand-drilldown-item span { justify-self: start; }
   .demand-filter-panel .span-2,
   .demand-filter-actions { grid-column: auto; }
