@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISAVALIA</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa5-extrato" />
+    <link rel="stylesheet" href="src/styles.css?v=20260720-etapa5-art-value" />
   </head>
   <body class="auth-locked">
     <section id="loginGate" class="login-gate" aria-labelledby="loginTitle">
@@ -121,6 +121,8 @@
             <article role="button" tabindex="0" data-demand-drilldown="pending_payment"><small>Pagamento pendente</small><strong data-demand-metric="pending_payment">0</strong></article>
             <article role="button" tabindex="0" data-demand-drilldown="service_value"><small>Valor dos serviços</small><strong data-demand-money="total_service_value">R$ 0,00</strong></article>
             <article role="button" tabindex="0" data-demand-drilldown="partner_fees"><small>Honorários de parceiros</small><strong data-demand-money="total_partner_fees">R$ 0,00</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="art_values"><small>Valor das ARTs</small><strong data-demand-money="total_art_value">R$ 0,00</strong></article>
+            <article role="button" tabindex="0" data-demand-drilldown="net_value"><small>Valor livre das OS</small><strong data-demand-money="total_net_value">R$ 0,00</strong></article>
           </div>
           <div id="demandDrilldownPanel" class="demand-drilldown-panel" hidden>
             <div class="demand-drilldown-heading">
@@ -189,6 +191,7 @@
               <label>Valor do serviço<input id="demandServiceValue" type="number" min="0" step="0.01" /></label>
               <label>Engenheiro<select id="demandEngineer"><option value="">Não definido</option></select></label>
               <label>Status da ART<select id="demandArtStatus"><option>Pendente</option><option>ART paga</option><option>Isento</option><option>Cancelada</option></select></label>
+              <label>Valor da ART<input id="demandArtValue" type="number" min="0" step="0.01" placeholder="Despesa da ART" /></label>
               <label>Parceiro<select id="demandPartner"><option value="">Não definido</option></select></label>
               <label>Honorário do parceiro<input id="demandPartnerFee" type="number" min="0" step="0.01" /></label>
               <label>Cidade<input id="demandCity" required /></label>
@@ -800,6 +803,6 @@
     </div>
     <script src="src/app.js?v=20260710-delete-photo"></script>
     <script src="src/search-engine.js?v=20260702-2010"></script>
-    <script src="src/demand-control.js?v=20260720-etapa5-extrato"></script>
+    <script src="src/demand-control.js?v=20260720-etapa5-art-value"></script>
   </body>
 </html>

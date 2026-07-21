@@ -237,9 +237,11 @@
   function demandFinancialSummary(item) {
     const serviceValue = Number(item.service_value || 0);
     const partnerFee = Number(item.partner_fee || 0);
-    const netValue = serviceValue - partnerFee;
+    const artValue = Number(item.art_value || 0);
+    const netValue = serviceValue - partnerFee - artValue;
     const partnerPercent = serviceValue > 0 ? (partnerFee / serviceValue) * 100 : 0;
-    return { serviceValue, partnerFee, netValue, partnerPercent };
+    const artPercent = serviceValue > 0 ? (artValue / serviceValue) * 100 : 0;
+    return { serviceValue, partnerFee, artValue, netValue, partnerPercent, artPercent };
   }
 
   function renderDemandRows(items) {
@@ -301,6 +303,7 @@
       service_value: item.service_value != null ? Number(item.service_value) : null,
       engineer_id: item.engineer_id || null,
       art_status: item.art_status || "Pendente",
+      art_value: item.art_value != null ? Number(item.art_value) : null,
       partner_id: item.partner_id || null,
       partner_fee: item.partner_fee != null ? Number(item.partner_fee) : null,
       city: item.city,
@@ -391,8 +394,10 @@
         <div class="demand-detail-metrics">
           ${detailMetric("Valor do serviço", money(financial.serviceValue), "main")}
           ${detailMetric("Honorário do parceiro", money(financial.partnerFee), "partner")}
+          ${detailMetric("Valor da ART", money(financial.artValue), "art")}
           ${detailMetric("Valor líquido estimado", money(financial.netValue), financial.netValue >= 0 ? "ok" : "fail")}
           ${detailMetric("% do honorário", percent(financial.partnerPercent), "neutral")}
+          ${detailMetric("% da ART", percent(financial.artPercent), "neutral")}
         </div>
         <div class="demand-status-row">
           ${statusPill("Pagamento", demand.payment_status, paymentTone)}
@@ -480,6 +485,22 @@
         value: (items) => money(items.reduce((total, item) => total + Number(item.partner_fee || 0), 0)),
         lineValue: (item) => money(item.partner_fee),
       },
+      art_values: {
+        title: "Valor das ARTs",
+        description: "Composição dos valores de ART informados manualmente nas demandas.",
+        dashboardMoneyKey: "total_art_value",
+        filter: (item) => Number(item.art_value || 0) > 0,
+        value: (items) => money(items.reduce((total, item) => total + Number(item.art_value || 0), 0)),
+        lineValue: (item) => money(item.art_value),
+      },
+      net_value: {
+        title: "Valor livre das OS",
+        description: "Valor dos serviços descontando honorários de parceiros e ARTs.",
+        dashboardMoneyKey: "total_net_value",
+        filter: (item) => Number(item.service_value || 0) > 0,
+        value: (items) => money(items.reduce((total, item) => total + demandFinancialSummary(item).netValue, 0)),
+        lineValue: (item) => money(demandFinancialSummary(item).netValue),
+      },
     };
     return configs[type] || configs.total;
   }
@@ -566,7 +587,7 @@
     const margins = { top: 22, right: 20, bottom: 48, left: 64 };
     const chartWidth = width - margins.left - margins.right;
     const chartHeight = height - margins.top - margins.bottom;
-    const maximum = Math.max(...items.flatMap((item) => [Number(item.gross_revenue || 0), Number(item.partner_fees || 0), Number(item.estimated_net || 0)]), 1);
+    const maximum = Math.max(...items.flatMap((item) => [Number(item.gross_revenue || 0), Number(item.partner_fees || 0), Number(item.art_values || 0), Number(item.estimated_net || 0)]), 1);
     context.font = "11px Inter, Arial";
     context.lineWidth = 1;
     for (let index = 0; index <= 4; index += 1) {
@@ -912,7 +933,8 @@
       demandProponentCpf: demand.proponent_cpf, demandArrivalDate: demand.arrival_date,
       demandDeadlineDays: demand.deadline_days, demandDeadline: demand.client_deadline,
       demandServiceValue: demand.service_value, demandEngineer: demand.engineer_id,
-      demandArtStatus: demand.art_status, demandPartner: demand.partner_id,
+      demandArtStatus: demand.art_status, demandArtValue: demand.art_value,
+      demandPartner: demand.partner_id,
       demandPartnerFee: demand.partner_fee, demandCity: demand.city,
       demandState: demand.state_code, demandStatus: demand.demand_status,
       demandPartnerStatus: demand.partner_status, demandSystemStatus: demand.system_status,
@@ -951,6 +973,7 @@
         service_value: value("demandServiceValue") ? Number(value("demandServiceValue")) : null,
         engineer_id: value("demandEngineer") || null,
         art_status: value("demandArtStatus"),
+        art_value: value("demandArtValue") ? Number(value("demandArtValue")) : null,
         partner_id: value("demandPartner") || null,
         partner_fee: value("demandPartnerFee") ? Number(value("demandPartnerFee")) : null,
         city: value("demandCity"),

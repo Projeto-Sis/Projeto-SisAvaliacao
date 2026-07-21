@@ -1665,6 +1665,7 @@ canvas {
 }
 .demand-detail-metric.main { border-top-color: var(--blue); }
 .demand-detail-metric.partner { border-top-color: var(--amber); }
+.demand-detail-metric.art { border-top-color: #7c3aed; }
 .demand-detail-metric.ok { border-top-color: var(--green); }
 .demand-detail-metric.fail { border-top-color: var(--red); }
 .demand-detail-metric.neutral { border-top-color: var(--cyan); }

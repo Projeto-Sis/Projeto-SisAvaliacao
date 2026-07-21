@@ -48,6 +48,7 @@ class DemandInput(BaseModel):
     service_value: Decimal | None = Field(default=None, ge=0)
     engineer_id: UUID | None = None
     art_status: str = "Pendente"
+    art_value: Decimal | None = Field(default=None, ge=0)
     partner_id: UUID | None = None
     partner_fee: Decimal | None = Field(default=None, ge=0)
     city: str = Field(min_length=1, max_length=200)

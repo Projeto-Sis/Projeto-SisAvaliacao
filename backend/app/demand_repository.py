@@ -25,22 +25,26 @@ class DemandRepository:
     def _digits(value: str | None) -> str:
         return "".join(character for character in str(value or "") if character.isdigit())
 
-    def ensure_demand_proponent_columns(self) -> None:
+    def ensure_demand_compatibility_columns(self) -> None:
         """Garante compatibilidade quando o Render sobe código novo antes da migration.
 
         O deploy correto executa as migrations, mas em ambientes manuais pode acontecer
-        de o frontend/backend novo subir com um banco ainda sem as colunas adicionadas
-        para pesquisa por proponente. Esse ajuste é idempotente e evita que a lista
-        inteira de demandas pare por falta dessas colunas.
+        de o frontend/backend novo subir com um banco ainda sem colunas adicionadas
+        em evoluções recentes. Esse ajuste é idempotente e evita que a lista inteira
+        de demandas pare por falta dessas colunas.
         """
         with connect(self.database_url) as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 ALTER TABLE demands
                   ADD COLUMN IF NOT EXISTS proponent_name text,
-                  ADD COLUMN IF NOT EXISTS proponent_cpf text
+                  ADD COLUMN IF NOT EXISTS proponent_cpf text,
+                  ADD COLUMN IF NOT EXISTS art_value numeric(15, 2) CHECK (art_value IS NULL OR art_value >= 0)
                 """
             )
+
+    def ensure_demand_proponent_columns(self) -> None:
+        self.ensure_demand_compatibility_columns()
 
     def list_client_banks(self) -> list[dict[str, Any]]:
         with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
@@ -148,7 +152,9 @@ class DemandRepository:
                 row["deadline_status"] = deadline_status(
                     row["arrival_date"], row["deadline_days"], row["system_finished_at"]
                 )
-                row["estimated_net_value"] = (row["service_value"] or 0) - (row["partner_fee"] or 0)
+                row["estimated_net_value"] = (
+                    (row["service_value"] or 0) - (row["partner_fee"] or 0) - (row["art_value"] or 0)
+                )
                 row["partner_fee_percentage"] = (
                     (row["partner_fee"] / row["service_value"] * 100)
                     if row["partner_fee"] and row["service_value"] else 0
@@ -212,14 +218,14 @@ class DemandRepository:
                     INSERT INTO demands
                       (client_bank_id, os_number, final_os_number, proponent_name, proponent_cpf,
                        arrival_date, client_deadline, deadline_days,
-                       service_value, engineer_id, art_status, partner_id, partner_fee, city, state_code,
+                       service_value, engineer_id, art_status, art_value, partner_id, partner_fee, city, state_code,
                        delivered_to_engineer_at, system_finished_at, demand_status, partner_status,
                        system_status, payment_status, notes, evaluation_id, import_origin)
                     VALUES
                       (%(client_bank_id)s, %(os_number)s, %(final_os_number)s,
                        %(proponent_name)s, %(proponent_cpf)s, %(arrival_date)s,
                        %(client_deadline)s, %(deadline_days)s, %(service_value)s, %(engineer_id)s,
-                       %(art_status)s, %(partner_id)s, %(partner_fee)s, %(city)s, %(state_code)s,
+                       %(art_status)s, %(art_value)s, %(partner_id)s, %(partner_fee)s, %(city)s, %(state_code)s,
                        %(delivered_to_engineer_at)s, %(system_finished_at)s, %(demand_status)s,
                        %(partner_status)s, %(system_status)s, %(payment_status)s, %(notes)s,
                        %(evaluation_id)s, %(import_origin)s)
@@ -277,6 +283,7 @@ class DemandRepository:
                       proponent_name=%(proponent_name)s, proponent_cpf=%(proponent_cpf)s,
                       arrival_date=%(arrival_date)s, client_deadline=%(client_deadline)s, deadline_days=%(deadline_days)s,
                       service_value=%(service_value)s, engineer_id=%(engineer_id)s, art_status=%(art_status)s,
+                      art_value=%(art_value)s,
                       partner_id=%(partner_id)s, partner_fee=%(partner_fee)s, city=%(city)s, state_code=%(state_code)s,
                       delivered_to_engineer_at=%(delivered_to_engineer_at)s, system_finished_at=%(system_finished_at)s,
                       demand_status=%(demand_status)s, partner_status=%(partner_status)s, system_status=%(system_status)s,
@@ -397,7 +404,9 @@ class DemandRepository:
                   COUNT(*) FILTER (WHERE payment_status IN ('Não realizado', 'Parcial')) AS pending_payment,
                   COUNT(*) FILTER (WHERE CURRENT_DATE >= client_deadline AND demand_status NOT IN ('Entregue','Cancelada')) AS overdue,
                   COALESCE(SUM(service_value), 0) AS total_service_value,
-                  COALESCE(SUM(partner_fee), 0) AS total_partner_fees
+                  COALESCE(SUM(partner_fee), 0) AS total_partner_fees,
+                  COALESCE(SUM(art_value), 0) AS total_art_value,
+                  COALESCE(SUM(COALESCE(service_value, 0) - COALESCE(partner_fee, 0) - COALESCE(art_value, 0)), 0) AS total_net_value
                 FROM demands
                 """
             )
@@ -428,7 +437,8 @@ class DemandRepository:
                        COUNT(*) AS os_count,
                        COALESCE(SUM(d.service_value), 0) AS gross_revenue,
                        COALESCE(SUM(d.partner_fee), 0) AS partner_fees,
-                       COALESCE(SUM(COALESCE(d.service_value, 0) - COALESCE(d.partner_fee, 0)), 0) AS estimated_net,
+                       COALESCE(SUM(d.art_value), 0) AS art_values,
+                       COALESCE(SUM(COALESCE(d.service_value, 0) - COALESCE(d.partner_fee, 0) - COALESCE(d.art_value, 0)), 0) AS estimated_net,
                        COALESCE(SUM(p.paid), 0) AS paid,
                        COALESCE(SUM(p.pending), 0) AS pending
                 FROM demands d
@@ -503,15 +513,16 @@ class DemandRepository:
                     """
                     INSERT INTO demands
                       (client_bank_id, os_number, final_os_number, arrival_date, client_deadline, deadline_days,
-                       service_value, engineer_id, art_status, partner_id, partner_fee, city, state_code,
+                       service_value, engineer_id, art_status, art_value, partner_id, partner_fee, city, state_code,
                        delivered_to_engineer_at, system_finished_at, demand_status, partner_status,
                        system_status, payment_status, notes, import_origin)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (client_bank_id, os_number) DO NOTHING
                     RETURNING id
                     """,
                     (bank["id"], item["os_number"], item.get("final_os_number"), item["arrival_date"], client_deadline,
-                     deadline_days, item.get("service_value"), engineer_id, item["art_status"], partner_id,
+                     deadline_days, item.get("service_value"), engineer_id, item["art_status"], item.get("art_value"),
+                     partner_id,
                      item.get("partner_fee"), item["city"].strip(), item["state_code"][:2].upper(),
                      item.get("delivered_to_engineer_at"), item.get("system_finished_at"), item["demand_status"],
                      item["partner_status"], item["system_status"], item["payment_status"], item.get("notes"),
