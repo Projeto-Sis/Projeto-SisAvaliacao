@@ -433,6 +433,7 @@
       <div class="inline-actions span-3">
         <button type="button" class="secondary-button" data-detail-edit="${demand.id}">Editar cadastro</button>
         <button type="button" class="primary-button" data-detail-create-evaluation="${demand.id}">${demand.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button>
+        <button type="button" class="secondary-button" data-detail-link-evaluation="${demand.id}">Vincular avaliação existente</button>
       </div>
     `;
     demandDetailPanel.hidden = false;
@@ -644,7 +645,59 @@
       </div>`).join("");
   }
 
-  function useDemandInEvaluation(demand) {
+  function savedEvaluationsForDemand(demand) {
+    if (!demand || !window.SISAVALIA?.findStoredProjectsByOs) return [];
+    return window.SISAVALIA.findStoredProjectsByOs(demand.os_number);
+  }
+
+  function duplicateEvaluationReferences(demand) {
+    const savedProjects = savedEvaluationsForDemand(demand);
+    if (savedProjects.length || !demand?.evaluation_id) return savedProjects;
+    return [{
+      id: "",
+      name: "Avaliação vinculada no Controle de Demanda",
+      osNumber: demand.os_number,
+      proponent: demand.proponent_name || "",
+      city: demand.city || "",
+      state: demand.state_code || "",
+      updatedAt: "",
+      sampleCount: 0,
+      backendOnly: true,
+    }];
+  }
+
+  function renderDuplicateEvaluationDecision(demand, savedProjects) {
+    evaluationSearchResults = [demand];
+    evaluationDemandMatches.hidden = false;
+    evaluationDemandMatches.innerHTML = `
+      <div class="evaluation-duplicate-card">
+        <span class="financial-kicker">Possível duplicidade identificada</span>
+        <h4>Já existe avaliação salva com a OS ${escapeHtml(demand.os_number)}.</h4>
+        <p>Escolha uma ação antes de preencher a avaliação. O SISAVALIA não substituirá dados automaticamente.</p>
+        <div class="evaluation-duplicate-actions">
+          <button type="button" class="secondary-button" data-evaluation-decision="verify" data-demand-id="${demand.id}">Verificar</button>
+          <button type="button" class="primary-button" data-evaluation-decision="replace" data-demand-id="${demand.id}">Substituir</button>
+          <button type="button" class="ghost-button" data-evaluation-decision="keep" data-demand-id="${demand.id}">Manter</button>
+        </div>
+        <div class="evaluation-duplicate-list" hidden>
+          ${savedProjects.map((project) => `
+            <article>
+              <div>
+                <strong>${escapeHtml(project.name)}</strong>
+                <small>OS ${escapeHtml(project.osNumber || demand.os_number)} · ${escapeHtml([project.city, project.state].filter(Boolean).join("/") || "Local não informado")} · ${project.backendOnly ? "Registro vinculado no PostgreSQL" : `${Number(project.sampleCount || 0).toLocaleString("pt-BR")} amostra(s)`}</small>
+              </div>
+              ${project.id
+                ? `<button type="button" class="table-action" data-open-project="${escapeHtml(project.id)}">Abrir para verificar</button>`
+                : '<span class="registry-state">Sem projeto local</span>'}
+            </article>
+          `).join("")}
+        </div>
+      </div>`;
+    evaluationDemandMessage.textContent = `Existe avaliação salva com a OS ${demand.os_number}. Escolha: verificar, substituir ou manter.`;
+    evaluationDemandMessage.className = "project-status warn";
+  }
+
+  function fillDemandFields(demand, preserveExisting = false) {
     const mappings = {
       osNumber: demand.os_number,
       osDate: demand.arrival_date,
@@ -656,35 +709,55 @@
     };
     Object.entries(mappings).forEach(([id, fieldValue]) => {
       const field = document.querySelector(`#${id}`);
-      if (field && fieldValue != null) field.value = fieldValue;
+      if (field && fieldValue != null && (!preserveExisting || !field.value)) field.value = fieldValue;
     });
     const projectName = document.querySelector("#projectName");
-    if (projectName) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
+    if (projectName && (!preserveExisting || !projectName.value.trim())) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
     sessionStorage.setItem("sisavalia.activeDemandId", demand.id);
+  }
+
+  async function registerEvaluationLink(demand, replaceExisting = false) {
+    if (!backendOnline || !demand?.id) return;
+    try {
+      const projectPayload = window.SISAVALIA?.currentProjectData ? window.SISAVALIA.currentProjectData() : {};
+      const result = await request(`/demands/${demand.id}/evaluation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-SISAVALIA-User": "Admin" },
+        body: JSON.stringify({
+          name: `${demand.bank_name} - OS ${demand.os_number}`,
+          project_payload: projectPayload,
+          replace_existing: Boolean(replaceExisting),
+        }),
+      });
+      const linkedId = result?.evaluation?.id || result?.demand?.evaluation_id;
+      if (linkedId) {
+        const localDemand = demands.find((item) => item.id === demand.id);
+        if (localDemand) localDemand.evaluation_id = linkedId;
+      }
+    } catch (error) {
+      evaluationDemandMessage.textContent = `Campos preenchidos, mas o vínculo no PostgreSQL não foi salvo: ${error.message}`;
+      evaluationDemandMessage.className = "project-status warn";
+    }
+  }
+
+  function useDemandInEvaluation(demand, options = {}) {
+    const savedProjects = duplicateEvaluationReferences(demand);
+    if (savedProjects.length && !options.confirmedReplacement) {
+      renderDuplicateEvaluationDecision(demand, savedProjects);
+      return;
+    }
+    fillDemandFields(demand, Boolean(options.preserveExisting));
     evaluationDemandMessage.textContent = `Avaliação vinculada à OS ${demand.os_number} de ${demand.bank_name}. Campos disponíveis preenchidos automaticamente.`;
     evaluationDemandMessage.className = "project-status ok";
     evaluationDemandMatches.hidden = true;
+    location.hash = "os";
+    registerEvaluationLink(demand, Boolean(options.confirmedReplacement));
     if (window.SISAVALIA?.updateAll) window.SISAVALIA.updateAll();
   }
 
   function openDemandInEvaluation(demand, preserveExisting = true) {
     if (!demand) return;
-    const mappings = {
-      osNumber: demand.os_number,
-      osDate: demand.arrival_date,
-      proponent: demand.proponent_name,
-      cpfCnpj: demand.proponent_cpf,
-      city: demand.city,
-      state: demand.state_code,
-    };
-    Object.entries(mappings).forEach(([id, fieldValue]) => {
-      const field = document.querySelector(`#${id}`);
-      if (field && (!preserveExisting || !field.value)) field.value = fieldValue || "";
-    });
-    const projectName = document.querySelector("#projectName");
-    if (projectName && (!preserveExisting || !projectName.value.trim())) projectName.value = `${demand.bank_name} - OS ${demand.os_number}`;
-    sessionStorage.setItem("sisavalia.activeDemandId", demand.id);
-    location.hash = "os";
+    useDemandInEvaluation(demand, { preserveExisting });
   }
 
   async function quickUpdateDemand(demandId, overrides, control, successText = "Demanda atualizada com sucesso.") {
@@ -1131,7 +1204,22 @@
       return;
     }
     const createButton = event.target.closest("[data-detail-create-evaluation]");
-    if (createButton) openDemandInEvaluation(demands.find((item) => item.id === createButton.dataset.detailCreateEvaluation), true);
+    if (createButton) {
+      openDemandInEvaluation(demands.find((item) => item.id === createButton.dataset.detailCreateEvaluation), true);
+      return;
+    }
+    const linkButton = event.target.closest("[data-detail-link-evaluation]");
+    if (linkButton) {
+      const demand = demands.find((item) => item.id === linkButton.dataset.detailLinkEvaluation);
+      const savedProjects = duplicateEvaluationReferences(demand);
+      if (savedProjects.length) {
+        renderDuplicateEvaluationDecision(demand, savedProjects);
+        location.hash = "os";
+      } else {
+        message.textContent = `Nenhuma avaliação salva foi encontrada para a OS ${demand?.os_number || ""}.`;
+        message.className = "project-status warn";
+      }
+    }
   });
   panel.querySelectorAll("[data-demand-drilldown]").forEach((card) => {
     card.addEventListener("click", () => renderDemandDrilldown(card.dataset.demandDrilldown));
@@ -1159,6 +1247,40 @@
     }
   });
   evaluationDemandMatches.addEventListener("click", (event) => {
+    const decisionButton = event.target.closest("[data-evaluation-decision]");
+    if (decisionButton) {
+      const demand = evaluationSearchResults.find((item) => item.id === decisionButton.dataset.demandId);
+      if (!demand) return;
+      const decision = decisionButton.dataset.evaluationDecision;
+      if (decision === "verify") {
+        const list = evaluationDemandMatches.querySelector(".evaluation-duplicate-list");
+        if (list) list.hidden = !list.hidden;
+        evaluationDemandMessage.textContent = "Abra a avaliação existente para verificar antes de decidir.";
+        evaluationDemandMessage.className = "project-status warn";
+        return;
+      }
+      if (decision === "replace") {
+        useDemandInEvaluation(demand, { confirmedReplacement: true, preserveExisting: false });
+        evaluationDemandMessage.textContent = `Dados da OS ${demand.os_number} substituíram os campos disponíveis da avaliação atual. Revise e salve o projeto.`;
+        evaluationDemandMessage.className = "project-status ok";
+        return;
+      }
+      if (decision === "keep") {
+        evaluationDemandMatches.hidden = true;
+        evaluationDemandMessage.textContent = `Mantida a avaliação existente da OS ${demand.os_number}; nenhum campo foi alterado.`;
+        evaluationDemandMessage.className = "project-status";
+        return;
+      }
+    }
+    const projectButton = event.target.closest("[data-open-project]");
+    if (projectButton) {
+      if (window.SISAVALIA?.openStoredProject) {
+        window.SISAVALIA.openStoredProject(projectButton.dataset.openProject);
+        evaluationDemandMessage.textContent = "Avaliação existente aberta para verificação.";
+        evaluationDemandMessage.className = "project-status ok";
+      }
+      return;
+    }
     const button = event.target.closest("[data-use-demand]");
     if (!button) return;
     const demand = evaluationSearchResults.find((item) => item.id === button.dataset.useDemand);

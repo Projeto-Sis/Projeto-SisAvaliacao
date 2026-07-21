@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 
 from .db import connect
 from .demand_domain import calculate_deadline, deadline_status, execution_days, normalize_text
-from .demand_schemas import DemandInput, EngineerInput, PartnerInput, PaymentInput, PaymentUpdate
+from .demand_schemas import DemandInput, EngineerInput, EvaluationProjectInput, PartnerInput, PaymentInput, PaymentUpdate
 
 
 class DuplicateDemandError(ValueError):
@@ -327,6 +327,82 @@ class DemandRepository:
                 (demand_id, json.dumps(previous, default=str), json.dumps(updated, default=str), user_id),
             )
             return updated
+
+    def create_or_update_evaluation_from_demand(
+        self,
+        demand_id: UUID,
+        payload: EvaluationProjectInput,
+        *,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Registra o vínculo entre uma demanda/OS e uma avaliação.
+
+        O projeto técnico principal do SISAVALIA permanece salvo no navegador,
+        mas este registro dá rastreabilidade no PostgreSQL para o Controle de
+        Demanda saber que a OS já originou uma avaliação.
+        """
+        data = payload.model_dump()
+        with connect(self.database_url) as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT d.*, cb.name AS bank_name
+                FROM demands d
+                JOIN client_banks cb ON cb.id = d.client_bank_id
+                WHERE d.id = %s
+                FOR UPDATE
+                """,
+                (demand_id,),
+            )
+            demand = cursor.fetchone()
+            if not demand:
+                raise LookupError("Demanda não encontrada.")
+            name = (data.get("name") or f"{demand['bank_name']} - OS {demand['os_number']}").strip()
+            project_payload = data.get("project_payload") or {}
+            if demand["evaluation_id"] and not data["replace_existing"]:
+                cursor.execute("SELECT * FROM evaluation_projects WHERE id = %s", (demand["evaluation_id"],))
+                evaluation = cursor.fetchone()
+                if evaluation:
+                    return {"status": "existing", "evaluation": evaluation, "demand": demand}
+            if demand["evaluation_id"] and data["replace_existing"]:
+                cursor.execute(
+                    """
+                    UPDATE evaluation_projects
+                    SET name=%s, os_number=%s, project_payload=%s::jsonb, status='Rascunho',
+                        report_status='Não iniciado', updated_at=now()
+                    WHERE id=%s
+                    RETURNING *
+                    """,
+                    (name, demand["os_number"], json.dumps(project_payload, default=str), demand["evaluation_id"]),
+                )
+                evaluation = cursor.fetchone()
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO evaluation_projects (name, os_number, project_payload, status, report_status)
+                    VALUES (%s, %s, %s::jsonb, 'Rascunho', 'Não iniciado')
+                    RETURNING *
+                    """,
+                    (name, demand["os_number"], json.dumps(project_payload, default=str)),
+                )
+                evaluation = cursor.fetchone()
+            cursor.execute(
+                "UPDATE demands SET evaluation_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+                (evaluation["id"], demand_id),
+            )
+            updated_demand = cursor.fetchone()
+            cursor.execute(
+                """
+                INSERT INTO demand_audit_events (entity, entity_id, action, previous_data, new_data, user_id)
+                VALUES ('demand', %s, 'evaluation_linked', %s::jsonb, %s::jsonb, %s)
+                """,
+                (
+                    demand_id,
+                    json.dumps({"evaluation_id": demand["evaluation_id"]}, default=str),
+                    json.dumps({"evaluation_id": evaluation["id"], "evaluation_name": evaluation["name"]}, default=str),
+                    user_id,
+                ),
+            )
+            return {"status": "linked", "evaluation": evaluation, "demand": updated_demand}
 
     def create_payment(self, payload: PaymentInput) -> dict[str, Any]:
         data = payload.model_dump()

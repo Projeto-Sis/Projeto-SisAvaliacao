@@ -2273,13 +2273,20 @@ function projectIdentifier() {
     : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function onlyDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
 function currentProjectData(id = state.activeProjectId || projectIdentifier()) {
   const fieldValues = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.value]));
+  const activeDemandId = sessionStorage.getItem("sisavalia.activeDemandId") || null;
   return {
     version: 1,
     id,
     name: projectName.value.trim() || fields.osNumber.value.trim() || "Laudo sem titulo",
     updatedAt: new Date().toISOString(),
+    linkedDemandId: activeDemandId,
+    linkedDemandOsNumber: fields.osNumber.value.trim() || null,
     fields: fieldValues,
     samples: state.samples.map((sample) => ({ ...sample })),
     reportPhotos: state.reportPhotos.map((photo) => ({ ...photo })),
@@ -2412,6 +2419,27 @@ function openStoredProject(id) {
   } catch (error) {
     setProjectStatus(error.message, "fail");
   }
+}
+
+function findStoredProjectsByOs(osNumber) {
+  const targetDigits = onlyDigits(osNumber);
+  const targetText = String(osNumber ?? "").trim().toLowerCase();
+  if (!targetDigits && !targetText) return [];
+  return readStoredProjects().filter((project) => {
+    const savedOs = String(project?.fields?.osNumber || project?.linkedDemandOsNumber || "").trim();
+    const savedDigits = onlyDigits(savedOs);
+    if (targetDigits && savedDigits && savedDigits === targetDigits) return true;
+    return Boolean(targetText && savedOs.toLowerCase() === targetText);
+  }).map((project) => ({
+    id: project.id,
+    name: project.name || "Laudo sem titulo",
+    osNumber: project?.fields?.osNumber || project.linkedDemandOsNumber || "",
+    proponent: project?.fields?.proponent || "",
+    city: project?.fields?.city || "",
+    state: project?.fields?.state || "",
+    updatedAt: project.updatedAt || "",
+    sampleCount: Array.isArray(project.samples) ? project.samples.length : 0,
+  }));
 }
 
 function deleteStoredProject(id) {
@@ -3399,6 +3427,10 @@ window.SISAVALIA = {
   activeModelVariables,
   buildReportReview,
   importApprovedSamples,
+  findStoredProjectsByOs,
+  openStoredProject,
+  saveCurrentProject,
+  currentProjectData,
   updateAll,
 };
 

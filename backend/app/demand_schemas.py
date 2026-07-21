@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -105,3 +106,9 @@ class PaymentUpdate(BaseModel):
         if self.payment_status == "Pagamento realizado" and self.paid_date is None:
             raise ValueError("Informe a data do pagamento realizado.")
         return self
+
+
+class EvaluationProjectInput(BaseModel):
+    name: str | None = Field(default=None, max_length=240)
+    project_payload: dict[str, Any] = Field(default_factory=dict)
+    replace_existing: bool = False

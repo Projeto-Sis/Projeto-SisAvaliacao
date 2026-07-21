@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 
 from .config import load_settings
 from .demand_repository import DemandRepository, DuplicateDemandError
-from .demand_schemas import DemandInput, EngineerInput, PartnerInput, PaymentInput, PaymentUpdate
+from .demand_schemas import DemandInput, EngineerInput, EvaluationProjectInput, PartnerInput, PaymentInput, PaymentUpdate
 
 
 router = APIRouter(prefix="/api/v1/demand-control", tags=["Controle de Demanda"])
@@ -102,6 +102,24 @@ def update_demand(demand_id: str, payload: DemandInput, x_sisavalia_user: str | 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/demands/{demand_id}/evaluation")
+def create_or_update_evaluation_from_demand(
+    demand_id: str,
+    payload: EvaluationProjectInput,
+    x_sisavalia_user: str | None = Header(default=None),
+) -> dict:
+    try:
+        return repository().create_or_update_evaluation_from_demand(
+            UUID(demand_id),
+            payload,
+            user_id=x_sisavalia_user,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/payments", status_code=201)

@@ -2195,6 +2195,40 @@ label { color: #52647a; font-weight: 600; }
 .evaluation-demand-match strong, .evaluation-demand-match small { display: block; }
 .evaluation-demand-match small { margin-top: 4px; color: var(--muted); }
 .evaluation-demand-match button { min-height: 34px; }
+.evaluation-duplicate-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(249, 132, 20, 0.38);
+  border-left: 5px solid var(--orange);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff8ed, #fff);
+  box-shadow: 0 12px 28px rgba(7, 59, 114, 0.07);
+}
+.evaluation-duplicate-card h4 { margin: 0; color: var(--navy); }
+.evaluation-duplicate-card p { color: var(--muted); }
+.evaluation-duplicate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.evaluation-duplicate-list {
+  display: grid;
+  gap: 8px;
+}
+.evaluation-duplicate-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.evaluation-duplicate-list strong,
+.evaluation-duplicate-list small { display: block; }
+.evaluation-duplicate-list small { margin-top: 3px; color: var(--muted); }
 .demand-create-panel summary { color: var(--blue); }
 .table-wrap { border-radius: 12px; box-shadow: 0 3px 12px rgba(7, 59, 114, 0.05); }
 .demand-table th { background: linear-gradient(135deg, var(--navy), var(--blue)); }
