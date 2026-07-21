@@ -67,6 +67,18 @@
     return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
+  function percent(value) {
+    const number = Number(value || 0);
+    return `${number.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  }
+
+  function formatDate(value) {
+    if (!value) return "Não informado";
+    const date = new Date(`${value}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("pt-BR");
+  }
+
   function normalize(value) {
     return String(value ?? "")
       .normalize("NFD")
@@ -198,6 +210,38 @@
     demandFilterSummary.className = hasFilter ? "project-status warn" : "project-status";
   }
 
+  function localDateString() {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 10);
+  }
+
+  function quickActionButtons(item) {
+    const actions = [];
+    if (item.art_status !== "ART paga") {
+      actions.push('<button type="button" class="table-action quick" data-quick-demand="' + item.id + '" data-quick-action="art_paid">ART paga</button>');
+    }
+    if (!item.delivered_to_engineer_at) {
+      actions.push('<button type="button" class="table-action quick" data-quick-demand="' + item.id + '" data-quick-action="delivered_engineer">Entregue eng.</button>');
+    }
+    if (item.system_status !== "Concluída" || !item.system_finished_at) {
+      actions.push('<button type="button" class="table-action quick" data-quick-demand="' + item.id + '" data-quick-action="system_finished">Finalizar sistema</button>');
+    }
+    if (item.payment_status !== "Pagamento realizado") {
+      actions.push('<button type="button" class="table-action quick payment" data-quick-demand="' + item.id + '" data-quick-action="payment_done">Pagamento realizado</button>');
+    }
+    if (!actions.length) return '<span class="quick-actions-done">Fluxo principal concluído</span>';
+    return actions.join("");
+  }
+
+  function demandFinancialSummary(item) {
+    const serviceValue = Number(item.service_value || 0);
+    const partnerFee = Number(item.partner_fee || 0);
+    const netValue = serviceValue - partnerFee;
+    const partnerPercent = serviceValue > 0 ? (partnerFee / serviceValue) * 100 : 0;
+    return { serviceValue, partnerFee, netValue, partnerPercent };
+  }
+
   function renderDemandRows(items) {
     visibleDemands = items;
     if (!items.length) {
@@ -221,7 +265,16 @@
             ${statusOptions(PAYMENT_STATUS_OPTIONS, item.payment_status)}
           </select>
         </td>
-        <td><div class="inline-actions"><button type="button" class="table-action" data-view-demand="${item.id}">Ver resumo</button><button type="button" class="table-action" data-edit-demand="${item.id}">Editar</button><button type="button" class="table-action" data-create-evaluation="${item.id}">${item.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button></div></td>
+        <td>
+          <div class="inline-actions">
+            <button type="button" class="table-action" data-view-demand="${item.id}">Ver detalhes</button>
+            <button type="button" class="table-action" data-edit-demand="${item.id}">Editar</button>
+            <button type="button" class="table-action" data-create-evaluation="${item.id}">${item.evaluation_id ? "Abrir avaliação" : "Criar avaliação"}</button>
+          </div>
+          <div class="quick-actions" aria-label="Ações rápidas da OS ${escapeHtml(item.os_number)}">
+            ${quickActionButtons(item)}
+          </div>
+        </td>
       </tr>`).join("");
     updateDemandFilterSummary(demands.length, items.length);
   }
@@ -283,30 +336,94 @@
     return `<div class="demand-detail-field"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value || "Não informado")}</strong></div>`;
   }
 
+  function detailMetric(label, value, tone = "") {
+    return `<div class="demand-detail-metric ${escapeHtml(tone)}"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value || "—")}</strong></div>`;
+  }
+
+  function statusPill(label, value, tone = "") {
+    return `<span class="demand-status-pill ${escapeHtml(tone)}">${escapeHtml(label)}: ${escapeHtml(value || "Não informado")}</span>`;
+  }
+
+  function timelineStep(label, value, completed, detail = "") {
+    return `
+      <div class="demand-timeline-step ${completed ? "done" : "pending"}">
+        <span aria-hidden="true"></span>
+        <div>
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(value || detail || (completed ? "Concluído" : "Pendente"))}</small>
+        </div>
+      </div>`;
+  }
+
+  function renderDemandTimeline(demand) {
+    return `
+      <div class="demand-detail-section span-3">
+        <div class="demand-detail-section-heading">
+          <span class="financial-kicker">Histórico operacional</span>
+          <h4>Linha do tempo da OS</h4>
+        </div>
+        <div class="demand-timeline">
+          ${timelineStep("Recebimento da demanda", formatDate(demand.arrival_date), Boolean(demand.arrival_date))}
+          ${timelineStep("Prazo do cliente", formatDate(demand.client_deadline), Boolean(demand.client_deadline), `${Number(demand.deadline_days || 7)} dia(s)`)}
+          ${timelineStep("ART regularizada", demand.art_status, demand.art_status === "ART paga" || demand.art_status === "Isento")}
+          ${timelineStep("Parceiro definido", demand.partner_name, Boolean(demand.partner_id || demand.partner_name))}
+          ${timelineStep("Entregue ao engenheiro", formatDate(demand.delivered_to_engineer_at), Boolean(demand.delivered_to_engineer_at))}
+          ${timelineStep("Finalizada no sistema/banco", formatDate(demand.system_finished_at), Boolean(demand.system_finished_at))}
+          ${timelineStep("Pagamento do parceiro", demand.payment_status, demand.payment_status === "Pagamento realizado" || demand.payment_status === "Não se aplica")}
+        </div>
+      </div>`;
+  }
+
   function renderDemandDetail(demand) {
     if (!demand || !demandDetailPanel) return;
+    const financial = demandFinancialSummary(demand);
+    const paymentTone = demand.payment_status === "Pagamento realizado" || demand.payment_status === "Não se aplica" ? "ok" : "warn";
+    const deadlineTone = demand.deadline_status === "Fora do prazo" ? "fail" : "ok";
+    const artTone = demand.art_status === "ART paga" || demand.art_status === "Isento" ? "ok" : "warn";
     demandDetailTitle.textContent = `${demand.bank_name || "Banco não informado"} · OS ${demand.os_number || "sem número"}`;
     demandDetailSummary.textContent = demandSubLabel(demand) || "Dados principais da demanda selecionada.";
     demandDetailBody.innerHTML = `
-      ${detailField("Banco / cliente", demand.bank_name)}
-      ${detailField("Número da OS", demand.os_number)}
-      ${detailField("Número final da OS", demand.final_os_number)}
-      ${detailField("Proponente", demand.proponent_name)}
-      ${detailField("CPF do proponente", demand.proponent_cpf)}
-      ${detailField("Cidade / UF", [demand.city, demand.state_code].filter(Boolean).join("/"))}
-      ${detailField("Engenheiro", demand.engineer_name)}
-      ${detailField("Parceiro", demand.partner_name)}
-      ${detailField("Prazo definido", demand.client_deadline)}
-      ${detailField("Status do prazo", demand.deadline_status)}
-      ${detailField("Situação", demand.demand_status)}
-      ${detailField("Status do parceiro", demand.partner_status)}
-      ${detailField("Status no sistema/banco", demand.system_status)}
-      ${detailField("ART", demand.art_status)}
-      ${detailField("Pagamento ao parceiro", demand.payment_status)}
-      ${detailField("Entregue ao engenheiro", demand.delivered_to_engineer_at)}
-      ${detailField("Finalizada no sistema", demand.system_finished_at)}
-      ${detailField("Valor do serviço", money(demand.service_value))}
-      ${detailField("Honorário do parceiro", money(demand.partner_fee))}
+      <div class="demand-detail-section span-3">
+        <div class="demand-detail-section-heading">
+          <span class="financial-kicker">Extrato financeiro</span>
+          <h4>Composição da OS</h4>
+        </div>
+        <div class="demand-detail-metrics">
+          ${detailMetric("Valor do serviço", money(financial.serviceValue), "main")}
+          ${detailMetric("Honorário do parceiro", money(financial.partnerFee), "partner")}
+          ${detailMetric("Valor líquido estimado", money(financial.netValue), financial.netValue >= 0 ? "ok" : "fail")}
+          ${detailMetric("% do honorário", percent(financial.partnerPercent), "neutral")}
+        </div>
+        <div class="demand-status-row">
+          ${statusPill("Pagamento", demand.payment_status, paymentTone)}
+          ${statusPill("Prazo", demand.deadline_status, deadlineTone)}
+          ${statusPill("ART", demand.art_status, artTone)}
+        </div>
+      </div>
+
+      <div class="demand-detail-section span-3">
+        <div class="demand-detail-section-heading">
+          <span class="financial-kicker">Dados cadastrais</span>
+          <h4>Identificação e responsáveis</h4>
+        </div>
+        <div class="demand-detail-grid">
+          ${detailField("Banco / cliente", demand.bank_name)}
+          ${detailField("Número da OS", demand.os_number)}
+          ${detailField("Número final da OS", demand.final_os_number)}
+          ${detailField("Proponente", demand.proponent_name)}
+          ${detailField("CPF do proponente", demand.proponent_cpf)}
+          ${detailField("Cidade / UF", [demand.city, demand.state_code].filter(Boolean).join("/"))}
+          ${detailField("Engenheiro", demand.engineer_name)}
+          ${detailField("Parceiro", demand.partner_name)}
+          ${detailField("Prazo definido", formatDate(demand.client_deadline))}
+          ${detailField("Situação", demand.demand_status)}
+          ${detailField("Status do parceiro", demand.partner_status)}
+          ${detailField("Status no sistema/banco", demand.system_status)}
+        </div>
+      </div>
+
+      ${renderDemandTimeline(demand)}
+
       <div class="demand-detail-field span-3"><small>Observações</small><strong>${escapeHtml(demand.notes || "Sem observações")}</strong></div>
       <div class="inline-actions span-3">
         <button type="button" class="secondary-button" data-detail-edit="${demand.id}">Editar cadastro</button>
@@ -549,7 +666,7 @@
     location.hash = "os";
   }
 
-  async function quickUpdateDemand(demandId, overrides, control) {
+  async function quickUpdateDemand(demandId, overrides, control, successText = "Demanda atualizada com sucesso.") {
     const demand = demands.find((item) => item.id === demandId);
     if (!demand) return;
     if (!backendOnline) {
@@ -568,7 +685,7 @@
         headers: { "Content-Type": "application/json", "X-SISAVALIA-User": "Admin" },
         body: JSON.stringify(payload),
       });
-      message.textContent = "Demanda atualizada com sucesso.";
+      message.textContent = successText;
       message.className = "project-status ok";
       await loadModule();
     } catch (error) {
@@ -578,6 +695,36 @@
     } finally {
       if (control) control.disabled = false;
     }
+  }
+
+  function quickActionPayload(action) {
+    const today = localDateString();
+    const actions = {
+      art_paid: {
+        label: "ART marcada como paga.",
+        overrides: { art_status: "ART paga" },
+      },
+      delivered_engineer: {
+        label: "Demanda marcada como entregue ao engenheiro.",
+        overrides: {
+          delivered_to_engineer_at: today,
+          demand_status: "Enviada ao engenheiro",
+        },
+      },
+      system_finished: {
+        label: "Demanda finalizada no sistema/banco.",
+        overrides: {
+          system_finished_at: today,
+          system_status: "Concluída",
+          demand_status: "Finalizada",
+        },
+      },
+      payment_done: {
+        label: "Pagamento ao parceiro marcado como realizado.",
+        overrides: { payment_status: "Pagamento realizado" },
+      },
+    };
+    return actions[action] || null;
   }
 
   async function searchDemandsForEvaluation() {
@@ -918,6 +1065,14 @@
     if (editButton) {
       const demand = demands.find((item) => item.id === editButton.dataset.editDemand);
       startEditingDemand(demand);
+      return;
+    }
+    const quickButton = event.target.closest("[data-quick-demand]");
+    if (quickButton) {
+      const action = quickActionPayload(quickButton.dataset.quickAction);
+      if (action) {
+        quickUpdateDemand(quickButton.dataset.quickDemand, action.overrides, quickButton, action.label);
+      }
       return;
     }
     const button = event.target.closest("[data-create-evaluation]");
